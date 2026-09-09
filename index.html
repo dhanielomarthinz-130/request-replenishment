@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=2.2">
+  <link rel="stylesheet" href="style.css?v=2.3">
 </head>
 <body>
 
@@ -138,18 +138,6 @@
               <input type="text" id="inputBinCode" class="scan-field" placeholder="Scan / ketik Bin Code (cth: PL-17-01-01)..." autocomplete="off" autofocus>
               <button type="button" id="btnClearScan" class="btn-clear-scan"><i class="fa-solid fa-xmark"></i></button>
             </form>
-
-            <!-- Quick Bin Scrollable Chips -->
-            <div class="quick-chips-wrapper">
-              <span class="chips-label">Pilih Cepat Bin OCS:</span>
-              <div class="chips-scroll-row" id="quickBinChipsList">
-                <button type="button" class="m-chip" onclick="scanSpecificBin('PL-17-01-01')">PL-17-01-01</button>
-                <button type="button" class="m-chip" onclick="scanSpecificBin('PL-18-01-01')">PL-18-01-01</button>
-                <button type="button" class="m-chip" onclick="scanSpecificBin('PL-18-01-02')">PL-18-01-02</button>
-                <button type="button" class="m-chip" onclick="scanSpecificBin('RP-16-01-03')">RP-16-01-03</button>
-                <button type="button" class="m-chip" onclick="scanSpecificBin('RP-13-03-02')">RP-13-03-02</button>
-              </div>
-            </div>
           </div>
 
           <!-- Loading Spinner Card -->
@@ -802,6 +790,6 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=2.2"></script>
+  <script src="app.js?v=2.3"></script>
 </body>
 </html>
