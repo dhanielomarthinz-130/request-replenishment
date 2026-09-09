@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#1e293b">
+  <meta name="theme-color" content="#4f46e5">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>OCS WMS Mobile & Panel</title>
@@ -17,75 +17,145 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=2.4">
+  <link rel="stylesheet" href="style.css?v=4.0">
 </head>
 <body>
 
   <!-- ========================================================================= -->
   <!-- 1. LOGIN SCREEN -->
   <!-- ========================================================================= -->
+  <!-- ========================================================================= -->
+  <!-- 1. LOGIN SCREEN (IEG OCS THEME) -->
+  <!-- ========================================================================= -->
   <div id="viewLogin" class="app-view active">
-    <div class="login-wrapper">
-      <div class="login-box">
-        
-        <div class="login-logo-area">
-          <div class="brand-logo-circle">
-            <i class="fa-solid fa-boxes-stacked"></i>
+    <div class="ieg-login-screen">
+      
+      <!-- Left Hero Column -->
+      <div class="ieg-login-hero">
+        <div class="ieg-hero-top-brand">
+          <div class="ieg-brand-icon-circle">
+            <i class="fa-solid fa-cart-shopping"></i>
           </div>
-          <h2>OCS WMS</h2>
-          <p>Warehouse Stock & Replenishment</p>
+          <div class="ieg-brand-text">
+            <h2>Request Replenish</h2>
+            <span>Inventory IEG</span>
+          </div>
         </div>
 
-        <form id="formLogin" class="login-form">
-          <div class="form-group-clean">
-            <label for="loginUsername">Username</label>
-            <div class="input-with-icon">
-              <i class="fa-regular fa-user"></i>
-              <input type="text" id="loginUsername" placeholder="Masukkan username" required autocomplete="username">
+        <div class="ieg-hero-center-text">
+          <h1>Selamat Datang<br>di IEG OCS</h1>
+          <p>Kelola pergudangan, pesanan, dan integrasi multi-platform dengan cepat dan akurat.</p>
+
+          <div class="ieg-feature-chips-grid">
+            <div class="ieg-chip">
+              <i class="fa-solid fa-globe"></i>
+              <span>Order Fulfillment</span>
+            </div>
+            <div class="ieg-chip">
+              <i class="fa-solid fa-boxes-stacked"></i>
+              <span>Stock Monitoring</span>
+            </div>
+            <div class="ieg-chip">
+              <i class="fa-solid fa-truck-fast"></i>
+              <span>Multi Shipping</span>
+            </div>
+            <div class="ieg-chip">
+              <i class="fa-solid fa-store"></i>
+              <span>Marketplace Sync</span>
             </div>
           </div>
-
-          <div class="form-group-clean">
-            <label for="loginPassword">Password</label>
-            <div class="input-with-icon">
-              <i class="fa-solid fa-lock"></i>
-              <input type="password" id="loginPassword" placeholder="Masukkan password" required autocomplete="current-password">
-            </div>
-          </div>
-
-          <button type="submit" id="btnLoginSubmit" class="btn-primary-mobile">
-            <span>Masuk</span>
-            <i class="fa-solid fa-arrow-right"></i>
-          </button>
-        </form>
-
-        <div class="demo-role-section">
-          <span class="demo-title">PILIH LOGIN CEPAT</span>
-          <div class="demo-buttons-grid">
-            <button type="button" class="demo-btn operator" onclick="quickLogin('operator', 'operator123')">
-              <i class="fa-solid fa-mobile-screen"></i>
-              <div>
-                <strong>Operator Inventory</strong>
-                <small>Mode Aplikasi Mobile (Android / iOS)</small>
-              </div>
-            </button>
-
-            <button type="button" class="demo-btn admin" onclick="quickLogin('admin', 'admin123')">
-              <i class="fa-solid fa-desktop"></i>
-              <div>
-                <strong>Admin Inventory</strong>
-                <small>Panel Web & Manajemen Master</small>
-              </div>
-            </button>
-          </div>
         </div>
 
-        <div class="login-bottom-info">
-          <span><i class="fa-solid fa-database"></i> MySQL Local</span>
-          <span><i class="fa-solid fa-cloud"></i> OCS Cloud Live</span>
+        <div class="ieg-hero-footer">
+          <p>&copy; 2026 PT Inovasi Eka Gemilang &mdash; All rights reserved</p>
         </div>
-
       </div>
+
+      <!-- Right Form Card Column -->
+      <div class="ieg-login-card-area">
+        <div class="ieg-login-card">
+          
+          <div class="ieg-card-logo-header">
+            <div class="ieg-corporate-logo">
+              <i class="fa-solid fa-cart-shopping logo-cart"></i>
+              <div class="corp-text">
+                <span class="corp-name">INOVASI EKA</span>
+                <span class="corp-sub">GEMILANG</span>
+              </div>
+            </div>
+            <h3>Masuk ke Akun Anda</h3>
+            <p>Silakan isi data di bawah untuk melanjutkan</p>
+          </div>
+
+          <form id="formLogin" class="ieg-auth-form">
+            <!-- Database select pill -->
+            <div class="ieg-field-group">
+              <label class="ieg-floating-label">Database</label>
+              <div class="ieg-select-box">
+                <i class="fa-solid fa-database lead-ico"></i>
+                <select id="loginDatabase">
+                  <option value="EJI_WMS" selected>EJI_WMS</option>
+                  <option value="EJI_LIVE">EJI_LIVE (Cloud)</option>
+                </select>
+                <i class="fa-solid fa-chevron-down arrow-ico"></i>
+              </div>
+            </div>
+
+            <!-- Username input -->
+            <div class="ieg-field-group">
+              <div class="ieg-input-wrapper">
+                <i class="fa-regular fa-user input-ico"></i>
+                <input type="text" id="loginUsername" placeholder="Username" required autocomplete="username">
+              </div>
+            </div>
+
+            <!-- Password input -->
+            <div class="ieg-field-group">
+              <div class="ieg-input-wrapper">
+                <i class="fa-solid fa-lock input-ico"></i>
+                <input type="password" id="loginPassword" placeholder="Password" required autocomplete="current-password">
+                <button type="button" class="btn-toggle-pass" onclick="toggleLoginPassword(this)" tabindex="-1">
+                  <i class="fa-regular fa-eye"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" id="btnLoginSubmit" class="btn-ieg-primary">
+              <span>Masuk</span>
+              <i class="fa-solid fa-arrow-right-to-bracket"></i>
+            </button>
+          </form>
+
+          <!-- Quick Access Demo Roles -->
+          <div class="demo-role-section ieg-quick-roles">
+            <span class="demo-title">PILIH LOGIN CEPAT</span>
+            <div class="demo-buttons-grid">
+              <button type="button" class="demo-btn operator" onclick="quickLogin('operator', 'operator123')">
+                <i class="fa-solid fa-mobile-screen"></i>
+                <div>
+                  <strong>Operator Inventory</strong>
+                  <small>Mode Mobile PDA (Android)</small>
+                </div>
+              </button>
+
+              <button type="button" class="demo-btn admin" onclick="quickLogin('admin', 'admin123')">
+                <i class="fa-solid fa-desktop"></i>
+                <div>
+                  <strong>Admin Inventory</strong>
+                  <small>Panel Web & Master Data</small>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="ieg-help-footer">
+            <a href="javascript:void(0)" onclick="showToast('Silakan hubungi IT Support di extension #104', 'info')">Butuh bantuan? Hubungi tim IT</a>
+          </div>
+
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -333,122 +403,255 @@
 
 
   <!-- ========================================================================= -->
-  <!-- 3. ADMIN INVENTORY PANEL (DESKTOP / TABLET) -->
+  <!-- 3. ADMIN INVENTORY PANEL (IEG OCS DESKTOP / TABLET) -->
   <!-- ========================================================================= -->
   <div id="viewAdmin" class="app-view">
-    <div class="admin-portal-layout">
+    <div class="admin-portal-layout ieg-theme">
       
-      <!-- Admin Sidebar -->
-      <aside class="admin-portal-sidebar">
-        <div class="portal-brand">
-          <div class="portal-logo"><i class="fa-solid fa-warehouse"></i></div>
+      <!-- Admin Sidebar (Dark Purple Navy) -->
+      <aside class="admin-portal-sidebar ieg-sidebar">
+        <!-- Brand Header -->
+        <div class="portal-brand ieg-brand">
+          <div class="portal-logo ieg-logo">
+            <i class="fa-solid fa-cart-shopping"></i>
+          </div>
           <div class="portal-titles">
-            <h2>OCS WMS</h2>
-            <span>Admin Inventory</span>
+            <div class="brand-name-row">
+              <h2>IEG OCS</h2>
+            </div>
+            <span class="brand-subtitle">Omni Channel System</span>
           </div>
         </div>
 
-        <nav class="portal-nav">
+        <!-- User Profile Card in Sidebar (Matching Screenshot 1) -->
+        <div class="ieg-sidebar-user-card">
+          <div class="ieg-user-avatar-pill">
+            <span>A</span>
+          </div>
+          <div class="ieg-user-text">
+            <strong id="adminUserName">ADMIN</strong>
+            <small>@ ADMIN</small>
+          </div>
+        </div>
+
+        <nav class="portal-nav ieg-nav">
           <button class="portal-nav-btn active" data-tab="tabDashboard">
-            <i class="fa-solid fa-chart-pie"></i>
-            <span>Dashboard</span>
+            <span class="nav-icon"><i class="fa-solid fa-house"></i></span>
+            <span class="nav-text">Home</span>
           </button>
-          <button class="portal-nav-btn" data-tab="tabSkuRacks">
-            <i class="fa-solid fa-table-cells"></i>
-            <span>Master SKU-Rack</span>
-          </button>
+
           <button class="portal-nav-btn" data-tab="tabReplenish">
-            <i class="fa-solid fa-dolly"></i>
-            <span>Permintaan Replenish</span>
+            <span class="nav-icon"><i class="fa-solid fa-truck-ramp-box"></i></span>
+            <span class="nav-text">Permintaan Replenish</span>
             <span class="portal-badge" id="badgePendingCount">0</span>
           </button>
-          <button class="portal-nav-btn" data-tab="tabStocks">
-            <i class="fa-solid fa-boxes-stacked"></i>
-            <span>Data Stok OCS</span>
+
+          <button class="portal-nav-btn" data-tab="tabSkuRacks">
+            <span class="nav-icon"><i class="fa-solid fa-table-cells"></i></span>
+            <span class="nav-text">Master SKU-Rack</span>
+            <span class="portal-badge-sm">5</span>
           </button>
+
+          <button class="portal-nav-btn" data-tab="tabStocks">
+            <span class="nav-icon"><i class="fa-solid fa-warehouse"></i></span>
+            <span class="nav-text">Data Stok OCS</span>
+            <span class="portal-badge-sm">13</span>
+          </button>
+
           <button class="portal-nav-btn" data-tab="tabUsers">
-            <i class="fa-solid fa-users"></i>
-            <span>Manajemen User</span>
+            <span class="nav-icon"><i class="fa-solid fa-users-gear"></i></span>
+            <span class="nav-text">Manajemen User</span>
           </button>
         </nav>
 
-        <div class="portal-user-footer">
+        <div class="portal-user-footer ieg-footer">
           <div class="user-block">
-            <div class="user-avatar-sm"><i class="fa-solid fa-user-shield"></i></div>
+            <div class="status-pulse-dot"></div>
             <div class="user-details">
-              <strong id="adminUserName">Administrator</strong>
-              <small>Super Admin</small>
+              <span class="role-pill">OCS Cloud Connected</span>
             </div>
           </div>
-          <button class="btn-portal-logout" onclick="logoutApp()" title="Keluar">
-            <i class="fa-solid fa-right-from-bracket"></i>
+          <button class="btn-portal-logout" onclick="logoutApp()" title="Keluar dari Akun">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
           </button>
         </div>
       </aside>
 
       <!-- Admin Main Area -->
-      <main class="admin-portal-main">
+      <main class="admin-portal-main ieg-main">
         
-        <!-- Top Action Bar -->
-        <header class="portal-topbar">
-          <div class="topbar-titles">
-            <h1 id="adminPageTitle">Dashboard Overview</h1>
-            <p id="adminPageSubtitle">Ringkasan operasional pergudangan & sinkronisasi stok</p>
+        <!-- Top Action Bar (Matching Screenshot 1) -->
+        <header class="portal-topbar ieg-topbar">
+          <div class="topbar-left">
+            <div class="ieg-topbar-breadcrumb">
+              <button class="btn-toggle-sidebar" title="Toggle Sidebar"><i class="fa-solid fa-bars"></i></button>
+              <span class="pink-divider">|</span>
+              <h1 id="adminPageTitle">Home</h1>
+            </div>
           </div>
-          <div class="topbar-actions">
-            <button class="btn-secondary-clean" onclick="openSyncProgressModal()">
-              <i class="fa-solid fa-arrows-rotate"></i> Sync Full Stok OCS
+
+          <div class="topbar-actions ieg-topbar-actions">
+            <button class="btn-topbar-action outline" onclick="openSyncProgressModal()" title="Sync Full Stok">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Sync Stok OCS</span>
             </button>
-            <button class="btn-secondary-clean" onclick="openSyncSkuRackModal()">
-              <i class="fa-solid fa-cloud-arrow-down"></i> Sync SKU-Rack OCS
+            <button class="btn-topbar-action outline" onclick="openSyncSkuRackModal()" title="Sync SKU-Rack">
+              <i class="fa-solid fa-cloud-arrow-down"></i>
+              <span>Sync SKU-Rack</span>
             </button>
-            <button class="btn-primary-clean" onclick="openModalAddRack()">
-              <i class="fa-solid fa-plus"></i> Tambah Bin Code Rak
+            <button class="btn-topbar-action primary" onclick="openModalAddRack()">
+              <i class="fa-solid fa-plus"></i>
+              <span>Tambah Bin Code</span>
             </button>
+
+            <!-- Top Right Icons matching Screenshot 1 -->
+            <div class="ieg-top-icons-group">
+              <button class="topbar-icon-btn" title="Dokumentasi"><i class="fa-regular fa-file-lines"></i></button>
+              <button class="topbar-icon-btn" title="Notifikasi"><i class="fa-regular fa-bell"></i></button>
+              <div class="topbar-user-badge">
+                <span>A</span>
+              </div>
+              <button class="topbar-logout-pill" onclick="logoutApp()" title="Keluar">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+              </button>
+            </div>
           </div>
         </header>
 
         <!-- Main Body Panes -->
-        <div class="portal-content-body">
+        <div class="portal-content-body ieg-content">
           
-          <!-- TAB 1: DASHBOARD -->
+          <!-- TAB 1: DASHBOARD (HOME) -->
           <section id="tabDashboard" class="portal-tab-pane active">
             
+            <!-- Hero Gradient Banner (Matching Screenshot 1) -->
+            <div class="ieg-dash-hero-banner">
+              <div class="hero-left-content">
+                <span class="hero-greeting" id="heroGreetingText">SELAMAT DATANG</span>
+                <h2 class="hero-user-heading">ADMIN <span class="wave-hand">👋</span></h2>
+                <span class="hero-role-pill"><i class="fa-solid fa-shield-halved"></i> ADMIN</span>
+              </div>
+              <div class="hero-search-area">
+                <div class="hero-search-bar">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input type="text" id="adminHeroSearch" placeholder="Cari menu atau fitur..." oninput="handleAdminHeroSearch(this.value)">
+                </div>
+              </div>
+            </div>
+
+            <!-- Modul Tersedia Section (Matching Screenshot 1) -->
+            <div class="ieg-section-title-row">
+              <div class="title-with-bar">
+                <span class="pink-accent-bar"></span>
+                <h3>Modul Tersedia</h3>
+              </div>
+              <span class="module-counter-text">5 Menu Utama</span>
+            </div>
+
+            <!-- Module Grid Cards (Matching Screenshot 1) -->
+            <div class="ieg-module-grid">
+              <div class="ieg-module-card featured" onclick="switchAdminTab('tabReplenish')">
+                <div class="module-icon-box purple-gradient">
+                  <i class="fa-solid fa-chart-line"></i>
+                </div>
+                <h4>Replenish Dashboard</h4>
+              </div>
+
+              <div class="ieg-module-card" onclick="switchAdminTab('tabReplenish')">
+                <div class="module-icon-box">
+                  <i class="fa-solid fa-truck-fast"></i>
+                </div>
+                <h4>Permintaan Replenish</h4>
+              </div>
+
+              <div class="ieg-module-card" onclick="switchAdminTab('tabSkuRacks')">
+                <div class="module-icon-box">
+                  <i class="fa-solid fa-table-cells"></i>
+                </div>
+                <h4>Master SKU-Rack</h4>
+              </div>
+
+              <div class="ieg-module-card" onclick="switchAdminTab('tabStocks')">
+                <div class="module-icon-box">
+                  <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <h4>Data Stok OCS</h4>
+              </div>
+
+              <div class="ieg-module-card" onclick="switchAdminTab('tabUsers')">
+                <div class="module-icon-box">
+                  <i class="fa-solid fa-users-gear"></i>
+                </div>
+                <h4>Manajemen User</h4>
+              </div>
+
+              <div class="ieg-module-card" onclick="openSyncProgressModal()">
+                <div class="module-icon-box">
+                  <i class="fa-solid fa-cloud-arrow-down"></i>
+                </div>
+                <h4>Sync OCS Live</h4>
+              </div>
+            </div>
+
             <!-- Key Metric Cards -->
-            <div class="stats-overview-grid">
-              <div class="stat-clean-card">
-                <div class="stat-icon-box blue"><i class="fa-solid fa-tags"></i></div>
-                <div class="stat-body">
-                  <span class="stat-label">Total Lokasi Bin Rack</span>
-                  <h3 id="statTotalRacks">0</h3>
-                  <small>Master SKU-Rack OCS</small>
+            <div class="stats-overview-grid ieg-stats-grid">
+              <div class="stat-clean-card card-blue">
+                <div class="stat-card-inner">
+                  <div class="stat-icon-box blue">
+                    <i class="fa-solid fa-tags"></i>
+                  </div>
+                  <div class="stat-body">
+                    <span class="stat-label">Total Lokasi Bin Rack</span>
+                    <h3 id="statTotalRacks">0</h3>
+                    <div class="stat-meta">
+                      <span class="meta-pill blue"><i class="fa-solid fa-layer-group"></i> Master OCS</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div class="stat-clean-card">
-                <div class="stat-icon-box amber"><i class="fa-solid fa-clock-rotate-left"></i></div>
-                <div class="stat-body">
-                  <span class="stat-label">Replenish Menunggu</span>
-                  <h3 id="statPendingReplenish" class="text-amber">0</h3>
-                  <small>Perlu Verifikasi</small>
+              <div class="stat-clean-card card-amber">
+                <div class="stat-card-inner">
+                  <div class="stat-icon-box amber">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                  </div>
+                  <div class="stat-body">
+                    <span class="stat-label">Replenish Menunggu</span>
+                    <h3 id="statPendingReplenish" class="text-amber">0</h3>
+                    <div class="stat-meta">
+                      <span class="meta-pill amber"><i class="fa-solid fa-bell"></i> Perlu Approval</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div class="stat-clean-card">
-                <div class="stat-icon-box green"><i class="fa-solid fa-circle-check"></i></div>
-                <div class="stat-body">
-                  <span class="stat-label">Replenish Selesai</span>
-                  <h3 id="statCompletedReplenish" class="text-green">0</h3>
-                  <small>Berhasil Dimutasi</small>
+              <div class="stat-clean-card card-green">
+                <div class="stat-card-inner">
+                  <div class="stat-icon-box green">
+                    <i class="fa-solid fa-circle-check"></i>
+                  </div>
+                  <div class="stat-body">
+                    <span class="stat-label">Replenish Selesai</span>
+                    <h3 id="statCompletedReplenish" class="text-green">0</h3>
+                    <div class="stat-meta">
+                      <span class="meta-pill green"><i class="fa-solid fa-check-double"></i> Berhasil Dimutasi</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div class="stat-clean-card">
-                <div class="stat-icon-box indigo"><i class="fa-solid fa-boxes-stacked"></i></div>
-                <div class="stat-body">
-                  <span class="stat-label">Total SKU Database</span>
-                  <h3 id="statTotalSku">0</h3>
-                  <small>Live Inventory OCS</small>
+              <div class="stat-clean-card card-indigo">
+                <div class="stat-card-inner">
+                  <div class="stat-icon-box indigo">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                  </div>
+                  <div class="stat-body">
+                    <span class="stat-label">Total SKU Database</span>
+                    <h3 id="statTotalSku">0</h3>
+                    <div class="stat-meta">
+                      <span class="meta-pill indigo"><i class="fa-solid fa-database"></i> Live Snapshot</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -457,10 +660,19 @@
             <div class="dashboard-double-grid">
               
               <!-- Left: Recent Requests -->
-              <div class="card-white">
+              <div class="card-white table-highlight-card">
                 <div class="card-white-head">
-                  <h3><i class="fa-solid fa-dolly"></i> Permintaan Replenish Terbaru</h3>
-                  <button class="btn-link" onclick="switchAdminTab('tabReplenish')">Lihat Semua</button>
+                  <div class="card-title-group">
+                    <div class="card-icon-tag"><i class="fa-solid fa-dolly"></i></div>
+                    <div>
+                      <h3>Permintaan Replenish Terbaru</h3>
+                      <p>Daftar pengajuan mutasi dari Operator Gudang yang masuk hari ini</p>
+                    </div>
+                  </div>
+                  <button class="btn-card-action" onclick="switchAdminTab('tabReplenish')">
+                    <span>Lihat Semua</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                  </button>
                 </div>
                 <div class="table-clean-wrapper">
                   <table class="table-clean">
@@ -472,7 +684,7 @@
                         <th>Qty Request</th>
                         <th>Operator</th>
                         <th>Status</th>
-                        <th>Aksi</th>
+                        <th class="td-center">Aksi</th>
                       </tr>
                     </thead>
                     <tbody id="dashReplenishTableBody">
@@ -483,10 +695,19 @@
               </div>
 
               <!-- Right: Low Stock Alert -->
-              <div class="card-white">
+              <div class="card-white low-stock-monitor-card">
                 <div class="card-white-head">
-                  <h3><i class="fa-solid fa-triangle-exclamation"></i> Monitoring Gudang Kecil</h3>
-                  <button class="btn-link" onclick="switchAdminTab('tabStocks')">Kelola Stok</button>
+                  <div class="card-title-group">
+                    <div class="card-icon-tag amber"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <div>
+                      <h3>Monitoring Gudang Kecil</h3>
+                      <p>SKU dengan stok picking menipis (&le; 15 Pcs)</p>
+                    </div>
+                  </div>
+                  <button class="btn-card-action" onclick="switchAdminTab('tabStocks')">
+                    <span>Kelola Stok</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                  </button>
                 </div>
                 <div class="low-stock-panel" id="dashLowStockList">
                   <div class="empty-feed">Memuat data monitoring...</div>
@@ -500,14 +721,29 @@
           <section id="tabSkuRacks" class="portal-tab-pane">
             <div class="card-white">
               <div class="table-toolbar">
-                <div class="search-input-box">
-                  <i class="fa-solid fa-magnifying-glass"></i>
-                  <input type="text" id="searchSkuRacks" placeholder="Cari Bin Code, SKU, Barcode, Nama Produk...">
+                <div class="toolbar-left-group">
+                  <div class="search-input-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="searchSkuRacks" placeholder="Cari Bin Code, SKU, Barcode, Nama Produk...">
+                  </div>
+                  <div class="toolbar-stats-hint">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Ketik untuk filter data real-time</span>
+                  </div>
                 </div>
                 <div class="toolbar-btns">
-                  <button class="btn-secondary-clean" onclick="loadSkuRacks()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
-                  <button class="btn-secondary-clean" onclick="openSyncSkuRackModal()"><i class="fa-solid fa-cloud-arrow-down"></i> Sync SKU-Rack OCS</button>
-                  <button class="btn-primary-clean" onclick="openModalAddRack()"><i class="fa-solid fa-plus"></i> Tambah Bin Code</button>
+                  <button class="btn-toolbar-btn outline" onclick="loadSkuRacks()" title="Muat ulang data">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Refresh</span>
+                  </button>
+                  <button class="btn-toolbar-btn outline" onclick="openSyncSkuRackModal()" title="Sync pemetaan lokasi dari OCS Cloud">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <span>Sync OCS</span>
+                  </button>
+                  <button class="btn-toolbar-btn primary" onclick="openModalAddRack()">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Tambah Bin Code</span>
+                  </button>
                 </div>
               </div>
 
@@ -538,14 +774,27 @@
             <div class="card-white">
               <div class="table-toolbar">
                 <div class="status-filter-pills" id="replenishStatusFilters">
-                  <button class="pill-filter active" data-status="ALL">Semua</button>
-                  <button class="pill-filter" data-status="PENDING">Menunggu (Pending)</button>
-                  <button class="pill-filter" data-status="APPROVED">Disetujui (Approved)</button>
-                  <button class="pill-filter" data-status="COMPLETED">Selesai (Completed)</button>
-                  <button class="pill-filter" data-status="REJECTED">Ditolak (Rejected)</button>
+                  <button class="pill-filter active" data-status="ALL">
+                    <i class="fa-solid fa-layer-group"></i> Semua
+                  </button>
+                  <button class="pill-filter" data-status="PENDING">
+                    <i class="fa-solid fa-hourglass-half"></i> Menunggu (Pending)
+                  </button>
+                  <button class="pill-filter" data-status="APPROVED">
+                    <i class="fa-solid fa-check"></i> Disetujui (Approved)
+                  </button>
+                  <button class="pill-filter" data-status="COMPLETED">
+                    <i class="fa-solid fa-circle-check"></i> Selesai (Completed)
+                  </button>
+                  <button class="pill-filter" data-status="REJECTED">
+                    <i class="fa-solid fa-ban"></i> Ditolak (Rejected)
+                  </button>
                 </div>
                 <div class="toolbar-btns">
-                  <button class="btn-secondary-clean" onclick="loadAdminReplenish()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+                  <button class="btn-toolbar-btn outline" onclick="loadAdminReplenish()">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Refresh</span>
+                  </button>
                 </div>
               </div>
 
@@ -557,9 +806,9 @@
                       <th>Waktu</th>
                       <th>Bin Code</th>
                       <th>SKU & Nama Produk</th>
-                      <th>Gudang Kecil</th>
-                      <th>Gudang Besar</th>
-                      <th>Qty Diajukan</th>
+                      <th class="td-right">Gudang Kecil</th>
+                      <th class="td-right">Gudang Besar</th>
+                      <th class="td-right">Qty Diajukan</th>
                       <th>Diajukan Oleh</th>
                       <th>Status</th>
                       <th class="td-center">Tindakan Admin</th>
@@ -577,13 +826,25 @@
           <section id="tabStocks" class="portal-tab-pane">
             <div class="card-white">
               <div class="table-toolbar">
-                <div class="search-input-box">
-                  <i class="fa-solid fa-magnifying-glass"></i>
-                  <input type="text" id="searchStocks" placeholder="Cari SKU, Barcode, Nama Produk, Bin Code...">
+                <div class="toolbar-left-group">
+                  <div class="search-input-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="searchStocks" placeholder="Cari SKU, Barcode, Nama Produk, Bin Code...">
+                  </div>
+                  <div class="toolbar-stats-hint">
+                    <i class="fa-solid fa-cloud"></i>
+                    <span>Data tersinkronisasi otomatis dengan OCS Cloud</span>
+                  </div>
                 </div>
                 <div class="toolbar-btns">
-                  <button class="btn-secondary-clean" onclick="loadStockList()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
-                  <button class="btn-primary-clean" onclick="openSyncProgressModal()"><i class="fa-solid fa-arrows-rotate"></i> Sync Full Stok OCS</button>
+                  <button class="btn-toolbar-btn outline" onclick="loadStockList()">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Refresh</span>
+                  </button>
+                  <button class="btn-toolbar-btn primary" onclick="openSyncProgressModal()">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Sync Full Stok OCS</span>
+                  </button>
                 </div>
               </div>
 
@@ -615,11 +876,14 @@
           <section id="tabUsers" class="portal-tab-pane">
             <div class="card-white">
               <div class="table-toolbar">
-                <div>
-                  <h3 style="font-size: 1.1rem; margin-bottom: 0.2rem;">Daftar Pengguna Sistem</h3>
-                  <p style="font-size: 0.82rem; color: var(--text-muted);">Kelola akun login Operator Gudang dan Administrator</p>
+                <div class="toolbar-title-box">
+                  <h3 class="toolbar-heading">Daftar Pengguna Sistem</h3>
+                  <p class="toolbar-subheading">Kelola akun login dan hak akses Operator Mobile & Administrator</p>
                 </div>
-                <button class="btn-primary-clean" onclick="openModalAddUser()"><i class="fa-solid fa-user-plus"></i> Tambah User</button>
+                <button class="btn-toolbar-btn primary" onclick="openModalAddUser()">
+                  <i class="fa-solid fa-user-plus"></i>
+                  <span>Tambah User</span>
+                </button>
               </div>
 
               <div class="table-clean-wrapper">
@@ -793,6 +1057,6 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=2.4"></script>
+  <script src="app.js?v=4.0"></script>
 </body>
 </html>

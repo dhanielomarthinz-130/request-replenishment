@@ -659,6 +659,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (titles[tabId]) {
             adminPageTitle.textContent = titles[tabId].title;
             adminPageSubtitle.textContent = titles[tabId].sub;
+            const breadcrumbCurrent = document.getElementById('breadcrumbCurrent');
+            if (breadcrumbCurrent) {
+                const shortTitles = {
+                    tabDashboard: 'Dashboard',
+                    tabSkuRacks: 'Master SKU-Rack',
+                    tabReplenish: 'Replenishment',
+                    tabStocks: 'Stok OCS',
+                    tabUsers: 'Pengguna'
+                };
+                breadcrumbCurrent.textContent = shortTitles[tabId] || titles[tabId].title;
+            }
         }
 
         if (tabId === 'tabDashboard') loadDashboardStats();
@@ -698,7 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderDashboardReplenish(items) {
         if (!dashReplenishTableBody) return;
         if (!items || items.length === 0) {
-            dashReplenishTableBody.innerHTML = `<tr><td colspan="7" class="td-center text-muted py-3">Belum ada permintaan replenish.</td></tr>`;
+            dashReplenishTableBody.innerHTML = `<tr><td colspan="7" class="td-center" style="padding: 2.5rem 1rem; color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Belum ada permintaan replenish yang masuk hari ini.</td></tr>`;
             return;
         }
 
@@ -707,13 +718,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <tr>
                     <td><strong>${r.request_no}</strong></td>
-                    <td><span class="loc-bin-tag">${r.bin_code}</span></td>
+                    <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
                     <td><strong>${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
-                    <td><strong style="color: var(--primary);">${r.qty_request} Pcs</strong></td>
-                    <td>${r.requested_by}</td>
+                    <td><strong style="color: var(--primary); font-family: var(--font-mono); font-size: 1rem;">${r.qty_request} Pcs</strong></td>
+                    <td><span style="font-weight: 600;">${r.requested_by}</span></td>
                     <td><span class="badge-status ${statusClass}">${r.status}</span></td>
-                    <td>
-                        <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" onclick="switchAdminTab('tabReplenish')">
+                    <td class="td-center">
+                        <button class="btn-primary-clean" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;" onclick="switchAdminTab('tabReplenish')">
                             Proses <i class="fa-solid fa-arrow-right"></i>
                         </button>
                     </td>
@@ -726,7 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dashLowStockList) return;
         const lowItems = (stocks || []).filter(s => (s.qty_gudang_kecil || 0) <= 15).slice(0, 5);
         if (lowItems.length === 0) {
-            dashLowStockList.innerHTML = `<div class="pda-empty">Semua stok di Gudang Kecil aman.</div>`;
+            dashLowStockList.innerHTML = `<div class="empty-feed" style="padding: 2rem 1rem;"><i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 1.5rem; display: block; margin-bottom: 0.4rem;"></i>Semua stok di Gudang Kecil dalam status aman.</div>`;
             return;
         }
 
@@ -734,11 +745,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="low-stock-row">
                 <div>
                     <strong>${s.sku}</strong>
-                    <span>${s.product_name} • Rak: ${s.bin_code || '-'}</span>
+                    <span>${s.product_name} • Rak: <strong style="color: var(--text-dark);">${s.bin_code || '-'}</strong></span>
                 </div>
                 <div style="text-align: right;">
                     <span class="qty-warn">${s.qty_gudang_kecil} Pcs</span>
-                    <small style="display: block; color: var(--text-muted);">Gudang Kecil</small>
+                    <small style="display: block; color: var(--text-muted); font-size: 0.7rem;">Gudang Kecil</small>
                 </div>
             </div>
         `).join('');
@@ -750,7 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.loadSkuRacks = async function() {
         const search = searchSkuRacks ? searchSkuRacks.value.trim() : '';
-        skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4">Memuat data...</td></tr>`;
+        skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data master SKU-Rack...</td></tr>`;
 
         try {
             const res = await fetch(`api.php?action=get_sku_racks&search=${encodeURIComponent(search)}`);
@@ -760,7 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderSkuRacksTable(json.data);
             }
         } catch (err) {
-            skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4 text-danger">Gagal memuat: ${err.message}</td></tr>`;
+            skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
@@ -770,22 +781,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderSkuRacksTable(items) {
         if (!items || items.length === 0) {
-            skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4 text-muted">Tidak ada data Bin Code yang cocok.</td></tr>`;
+            skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--text-muted);">Tidak ada data Bin Code yang cocok.</td></tr>`;
             return;
         }
 
         skuRacksTableBody.innerHTML = items.map(r => `
             <tr>
-                <td><strong class="loc-bin-tag">${r.bin_code}</strong></td>
+                <td><strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</strong></td>
                 <td><strong>${r.rack_name}</strong></td>
                 <td><code>${r.sku}</code></td>
-                <td><span style="font-family: var(--font-mono); font-size: 0.8rem;">${r.barcode || '-'}</span></td>
-                <td>${r.product_name}</td>
-                <td>${r.category || 'General'}</td>
-                <td><small style="color: var(--text-muted);">${(r.created_at || '').substring(0, 10)}</small></td>
+                <td><span style="font-family: var(--font-mono); font-size: 0.82rem; color: #475569;">${r.barcode || '-'}</span></td>
+                <td><strong style="color: #0f172a;">${r.product_name}</strong></td>
+                <td><span style="background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600;">${r.category || 'General'}</span></td>
+                <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(r.created_at || '').substring(0, 10)}</small></td>
                 <td class="td-center">
-                    <button class="btn-secondary-clean" style="padding: 0.35rem 0.6rem;" onclick="openModalEditRack(${r.id})"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn-secondary-clean" style="padding: 0.35rem 0.6rem; color: var(--danger);" onclick="deleteSkuRack(${r.id}, '${r.bin_code}')"><i class="fa-solid fa-trash"></i></button>
+                    <div style="display: flex; gap: 0.35rem; justify-content: center;">
+                        <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem;" title="Edit Lokasi" onclick="openModalEditRack(${r.id})"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; color: var(--danger);" title="Hapus Lokasi" onclick="deleteSkuRack(${r.id}, '${r.bin_code}')"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -905,7 +918,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAdminReplenishTable(items) {
         if (!items || items.length === 0) {
-            adminReplenishTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4 text-muted">Tidak ada data permintaan replenish.</td></tr>`;
+            adminReplenishTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Tidak ada data permintaan replenish yang ditemukan.</td></tr>`;
             return;
         }
 
@@ -918,30 +931,30 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isPending) {
                 actionsHtml = `
                     <div style="display: flex; gap: 0.35rem; justify-content: center;">
-                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; background: var(--success); font-size: 0.78rem;" title="Setujui" onclick="updateReplenishStatus(${r.id}, 'APPROVED')"><i class="fa-solid fa-check"></i> Setujui</button>
-                        <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; color: var(--danger); font-size: 0.78rem;" title="Tolak" onclick="updateReplenishStatus(${r.id}, 'REJECTED')"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; background: linear-gradient(135deg, #10b981 0%, #059669 100%); font-size: 0.78rem;" title="Setujui Mutasi" onclick="updateReplenishStatus(${r.id}, 'APPROVED')"><i class="fa-solid fa-check"></i> Setujui</button>
+                        <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; color: var(--danger); font-size: 0.78rem;" title="Tolak Mutasi" onclick="updateReplenishStatus(${r.id}, 'REJECTED')"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                 `;
             } else if (isApproved) {
                 actionsHtml = `
                     <div style="display: flex; gap: 0.35rem; justify-content: center;">
-                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Selesaikan Mutasi" onclick="updateReplenishStatus(${r.id}, 'COMPLETED')"><i class="fa-solid fa-box-check"></i> Selesaikan</button>
+                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Selesaikan Mutasi Fisik" onclick="updateReplenishStatus(${r.id}, 'COMPLETED')"><i class="fa-solid fa-box-check"></i> Selesaikan</button>
                     </div>
                 `;
             } else {
-                actionsHtml = `<small style="color: var(--text-muted);"><i class="fa-solid fa-lock"></i> Selesai</small>`;
+                actionsHtml = `<small style="color: var(--text-muted); font-weight: 600;"><i class="fa-solid fa-lock"></i> Selesai</small>`;
             }
 
             return `
                 <tr>
                     <td><strong>${r.request_no}</strong></td>
-                    <td><small style="color: var(--text-muted);">${(r.created_at || '').substring(0, 16)}</small></td>
-                    <td><span class="loc-bin-tag">${r.bin_code}</span></td>
-                    <td><strong>${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
-                    <td class="td-right">${r.qty_gudang_kecil} Pcs</td>
-                    <td class="td-right" style="color: var(--success); font-weight: 700;">${r.qty_gudang_besar} Pcs</td>
-                    <td class="td-right"><strong style="font-size: 1.05rem; color: var(--primary);">${r.qty_request} Pcs</strong></td>
-                    <td>${r.requested_by}</td>
+                    <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(r.created_at || '').substring(0, 16)}</small></td>
+                    <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
+                    <td><strong style="color: #0f172a;">${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
+                    <td class="td-right" style="font-family: var(--font-mono); font-weight: 600;">${r.qty_gudang_kecil} Pcs</td>
+                    <td class="td-right" style="color: var(--success); font-weight: 700; font-family: var(--font-mono);">${r.qty_gudang_besar} Pcs</td>
+                    <td class="td-right"><strong style="font-size: 1.05rem; color: var(--primary); font-family: var(--font-mono);">${r.qty_request} Pcs</strong></td>
+                    <td><span style="font-weight: 600;">${r.requested_by}</span></td>
                     <td><span class="badge-status ${statusClass}">${r.status}</span></td>
                     <td class="td-center">${actionsHtml}</td>
                 </tr>
@@ -988,7 +1001,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.loadStockList = async function() {
         const search = searchStocks ? searchStocks.value.trim() : '';
-        stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4">Memuat data stok...</td></tr>`;
+        stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data stok OCS...</td></tr>`;
 
         try {
             const res = await fetch(`api.php?action=get_stocks&search=${encodeURIComponent(search)}`);
@@ -998,7 +1011,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderStockTable(json.data);
             }
         } catch (err) {
-            stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4 text-danger">Gagal memuat: ${err.message}</td></tr>`;
+            stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
@@ -1008,22 +1021,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderStockTable(items) {
         if (!items || items.length === 0) {
-            stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4 text-muted">Belum ada data stok. Klik 'Sync Full Stok OCS' untuk sinkronisasi.</td></tr>`;
+            stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--text-muted);">Belum ada data stok. Klik 'Sync Full Stok OCS' untuk sinkronisasi.</td></tr>`;
             return;
         }
 
         stockMasterTableBody.innerHTML = items.map(s => `
             <tr>
                 <td><code>${s.sku}</code></td>
-                <td><span style="font-family: var(--font-mono); font-size: 0.8rem;">${s.barcode || '-'}</span></td>
-                <td><strong>${s.product_name}</strong></td>
-                <td>${s.bin_code ? `<span class="loc-bin-tag">${s.bin_code}</span>` : '<span style="color: var(--text-muted);">-</span>'}</td>
-                <td>${s.area_id || 'Pusat'}</td>
-                <td class="td-right"><strong>${Number(s.qty_gudang_kecil || 0).toLocaleString('id-ID')}</strong></td>
-                <td class="td-right" style="color: var(--success); font-weight: 700;">${Number(s.qty_gudang_besar || 0).toLocaleString('id-ID')}</td>
-                <td class="td-right">${Number(s.qty_on_hand || 0).toLocaleString('id-ID')}</td>
-                <td class="td-right">${Number(s.qty_available || 0).toLocaleString('id-ID')}</td>
-                <td><small style="color: var(--text-muted);">${(s.last_synced_at || '').substring(0, 16)}</small></td>
+                <td><span style="font-family: var(--font-mono); font-size: 0.8rem; color: #475569;">${s.barcode || '-'}</span></td>
+                <td><strong style="color: #0f172a;">${s.product_name}</strong></td>
+                <td>${s.bin_code ? `<span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</span>` : '<span style="color: var(--text-muted);">-</span>'}</td>
+                <td><span style="background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600;">${s.area_id || 'Pusat'}</span></td>
+                <td class="td-right"><strong style="font-family: var(--font-mono); font-size: 0.95rem;">${Number(s.qty_gudang_kecil || 0).toLocaleString('id-ID')}</strong></td>
+                <td class="td-right" style="color: var(--success); font-weight: 700; font-family: var(--font-mono); font-size: 0.95rem;">${Number(s.qty_gudang_besar || 0).toLocaleString('id-ID')}</td>
+                <td class="td-right" style="font-family: var(--font-mono);">${Number(s.qty_on_hand || 0).toLocaleString('id-ID')}</td>
+                <td class="td-right" style="font-family: var(--font-mono); font-weight: 600; color: #0284c7;">${Number(s.qty_available || 0).toLocaleString('id-ID')}</td>
+                <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(s.last_synced_at || '').substring(0, 16)}</small></td>
             </tr>
         `).join('');
     }
@@ -1143,7 +1156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
 
     window.loadUsers = async function() {
-        usersTableBody.innerHTML = `<tr><td colspan="6" class="td-center py-4">Memuat data pengguna...</td></tr>`;
+        usersTableBody.innerHTML = `<tr><td colspan="6" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data pengguna...</td></tr>`;
 
         try {
             const res = await fetch('api.php?action=get_users');
@@ -1152,31 +1165,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderUsersTable(json.data);
             }
         } catch (err) {
-            usersTableBody.innerHTML = `<tr><td colspan="6" class="td-center py-4 text-danger">Gagal: ${err.message}</td></tr>`;
+            usersTableBody.innerHTML = `<tr><td colspan="6" class="td-center py-4" style="color: var(--danger);">Gagal: ${err.message}</td></tr>`;
         }
     };
 
     function renderUsersTable(items) {
         if (!items || items.length === 0) {
-            usersTableBody.innerHTML = `<tr><td colspan="6" class="td-center py-4 text-muted">Belum ada user.</td></tr>`;
+            usersTableBody.innerHTML = `<tr><td colspan="6" class="td-center py-4" style="color: var(--text-muted);">Belum ada user terdaftar.</td></tr>`;
             return;
         }
 
         usersTableBody.innerHTML = items.map(u => {
             const roleBadge = u.role === 'admin' 
-                ? '<span class="badge-status approved"><i class="fa-solid fa-shield"></i> Admin</span>'
+                ? '<span class="badge-status approved"><i class="fa-solid fa-shield"></i> Administrator</span>'
                 : '<span class="badge-status completed"><i class="fa-solid fa-mobile-screen"></i> Operator PDA</span>';
 
             return `
                 <tr>
-                    <td>#${u.id}</td>
-                    <td><strong>${u.username}</strong></td>
-                    <td>${u.full_name}</td>
+                    <td><span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-muted);">#${u.id}</span></td>
+                    <td><strong style="color: #0f172a; font-size: 0.95rem;">${u.username}</strong></td>
+                    <td><strong style="color: #334155;">${u.full_name}</strong></td>
                     <td>${roleBadge}</td>
-                    <td><small style="color: var(--text-muted);">${(u.created_at || '').substring(0, 10)}</small></td>
+                    <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(u.created_at || '').substring(0, 10)}</small></td>
                     <td class="td-center">
                         <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem;" onclick="openModalEditUser(${JSON.stringify(u).replace(/"/g, '&quot;')})">
-                            <i class="fa-solid fa-pen"></i> Edit
+                            <i class="fa-solid fa-pen-to-square"></i> Edit
                         </button>
                     </td>
                 </tr>
