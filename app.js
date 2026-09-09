@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClearScan = document.getElementById('btnClearScan');
     const operatorLoadingSync = document.getElementById('operatorLoadingSync');
     const operatorProductResult = document.getElementById('operatorProductResult');
+    const scanEmptyState = document.getElementById('scanEmptyState');
     const resRackName = document.getElementById('resRackName');
     const resBinCode = document.getElementById('resBinCode');
     const resProductName = document.getElementById('resProductName');
@@ -253,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (operatorProductResult) operatorProductResult.style.display = 'none';
         if (alertGudangBesarKosong) alertGudangBesarKosong.style.display = 'none';
         if (operatorLoadingSync) operatorLoadingSync.style.display = 'none';
+        if (scanEmptyState) scanEmptyState.style.display = 'flex';
     };
 
     if (btnClearScan) {
@@ -303,6 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function executeBinScan(binCode) {
         operatorLoadingSync.style.display = 'flex';
         operatorProductResult.style.display = 'none';
+        if (scanEmptyState) scanEmptyState.style.display = 'none';
         AppState.currentScannedItem = null;
 
         try {

@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=2.3">
+  <link rel="stylesheet" href="style.css?v=2.4">
 </head>
 <body>
 
@@ -238,14 +238,17 @@
 
           </div>
 
-          <!-- Recent Replenish Requests Feed -->
-          <div class="recent-requests-card">
-            <div class="card-header-flex">
-              <h4><i class="fa-solid fa-clock-rotate-left"></i> Pengajuan Saya</h4>
-              <button class="link-btn" onclick="loadOperatorHistory()">Refresh</button>
+          <!-- Empty State Scan Guide -->
+          <div id="scanEmptyState" class="mobile-scan-empty-state">
+            <div class="empty-icon-radar">
+              <i class="fa-solid fa-barcode"></i>
+              <div class="radar-ping"></div>
             </div>
-            <div class="requests-feed-list" id="operatorHistoryList">
-              <div class="empty-feed">Belum ada pengajuan replenish hari ini.</div>
+            <h3>Siap Scan Bin Code</h3>
+            <p>Ketik atau scan barcode Bin/Rak pada kolom input di atas untuk sinkronisasi saldo stok Gudang Besar & Kecil secara real-time.</p>
+            <div class="quick-tips-row">
+              <div class="tip-chip"><i class="fa-solid fa-bolt"></i> Live OCS Cloud</div>
+              <div class="tip-chip"><i class="fa-solid fa-shield-check"></i> Validasi Otomatis</div>
             </div>
           </div>
 
@@ -790,6 +793,6 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=2.3"></script>
+  <script src="app.js?v=2.4"></script>
 </body>
 </html>
