@@ -238,12 +238,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    window.resetScanForm = function() {
+        AppState.currentScannedItem = null;
+        if (inputBinCode) {
+            inputBinCode.value = '';
+            setTimeout(() => inputBinCode.focus(), 120);
+        }
+        if (inputReplenishNotes) inputReplenishNotes.value = '';
+        if (inputQtyRequest) {
+            inputQtyRequest.value = 0;
+            inputQtyRequest.min = 0;
+            inputQtyRequest.max = 0;
+        }
+        if (operatorProductResult) operatorProductResult.style.display = 'none';
+        if (alertGudangBesarKosong) alertGudangBesarKosong.style.display = 'none';
+        if (operatorLoadingSync) operatorLoadingSync.style.display = 'none';
+    };
+
     if (btnClearScan) {
         btnClearScan.addEventListener('click', () => {
-            inputBinCode.value = '';
-            inputBinCode.focus();
-            operatorProductResult.style.display = 'none';
-            AppState.currentScannedItem = null;
+            window.resetScanForm();
         });
     }
 
@@ -503,18 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (json.status === 'success') {
                 showToast(`🎉 ${json.message}`, 'success');
-                
-                // Reset form and UI state for next scan
-                AppState.currentScannedItem = null;
-                if (inputBinCode) {
-                    inputBinCode.value = '';
-                    setTimeout(() => inputBinCode.focus(), 150);
-                }
-                if (inputReplenishNotes) inputReplenishNotes.value = '';
-                if (inputQtyRequest) inputQtyRequest.value = 0;
-                if (operatorProductResult) operatorProductResult.style.display = 'none';
-                if (alertGudangBesarKosong) alertGudangBesarKosong.style.display = 'none';
-
+                window.resetScanForm();
                 loadOperatorHistory();
             } else {
                 showToast(json.message || 'Gagal mengajukan permintaan.', 'error');
