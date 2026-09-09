@@ -69,7 +69,7 @@ class Database {
             // Table: sku_rack_locations (Mapping Bin Code -> SKU)
             $pdo->exec("CREATE TABLE IF NOT EXISTS `sku_rack_locations` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `bin_code` VARCHAR(50) NOT NULL UNIQUE,
+                `bin_code` VARCHAR(50) NOT NULL,
                 `rack_name` VARCHAR(50) NOT NULL,
                 `sku` VARCHAR(100) NOT NULL,
                 `barcode` VARCHAR(100) DEFAULT NULL,
@@ -78,6 +78,7 @@ class Database {
                 `notes` TEXT DEFAULT NULL,
                 `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uniq_bin_sku` (`bin_code`, `sku`),
                 INDEX (`sku`),
                 INDEX (`bin_code`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -138,7 +139,7 @@ class Database {
 
             $pdo->exec("CREATE TABLE IF NOT EXISTS sku_rack_locations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                bin_code TEXT NOT NULL UNIQUE,
+                bin_code TEXT NOT NULL,
                 rack_name TEXT NOT NULL,
                 sku TEXT NOT NULL,
                 barcode TEXT,
@@ -146,7 +147,8 @@ class Database {
                 category TEXT,
                 notes TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (bin_code, sku)
             );");
 
             $pdo->exec("CREATE TABLE IF NOT EXISTS stock_master (
@@ -190,6 +192,14 @@ class Database {
             );");
         }
 
+        // ---------------------------------------------------------------
+        // Migration: sku_rack_locations used to declare bin_code UNIQUE on its
+        // own. One bin in OCS can hold several SKUs (21 such bins in EJI_WMS),
+        // so every sync aborted on a duplicate-key error and rolled back all
+        // rows. The natural key is (bin_code, sku) — rebuild older databases.
+        // ---------------------------------------------------------------
+        self::migrateSkuRackUniqueKey();
+
         // Seed default users if empty
         $stmt = $pdo->query("SELECT COUNT(*) as cnt FROM users");
         $userCount = (int)($stmt->fetch()['cnt'] ?? 0);
@@ -230,6 +240,75 @@ class Database {
             foreach ($sampleStocks as $s) {
                 $insertStock->execute($s);
             }
+        }
+    }
+
+    /**
+     * Replaces the legacy UNIQUE(bin_code) constraint on sku_rack_locations
+     * with UNIQUE(bin_code, sku). Safe to run on every boot: it inspects the
+     * current schema first and does nothing once the new key is in place.
+     */
+    private static function migrateSkuRackUniqueKey(): void
+    {
+        $pdo = self::$pdo;
+
+        try {
+            if (self::$driverType === 'mysql') {
+                $indexes = $pdo->query("SHOW INDEX FROM `sku_rack_locations`")->fetchAll();
+                $hasNewKey = false;
+                $legacyKeys = [];
+                foreach ($indexes as $idx) {
+                    if ($idx['Key_name'] === 'uniq_bin_sku') {
+                        $hasNewKey = true;
+                    } elseif ((int)$idx['Non_unique'] === 0 && $idx['Key_name'] !== 'PRIMARY' && $idx['Column_name'] === 'bin_code') {
+                        $legacyKeys[$idx['Key_name']] = true;
+                    }
+                }
+                if ($hasNewKey && empty($legacyKeys)) {
+                    return;
+                }
+                foreach (array_keys($legacyKeys) as $keyName) {
+                    $pdo->exec("ALTER TABLE `sku_rack_locations` DROP INDEX `" . $keyName . "`");
+                }
+                if (!$hasNewKey) {
+                    $pdo->exec("ALTER TABLE `sku_rack_locations` ADD UNIQUE KEY `uniq_bin_sku` (`bin_code`, `sku`)");
+                }
+                return;
+            }
+
+            // SQLite cannot drop a column-level UNIQUE constraint, so the table
+            // has to be rebuilt and the existing rows copied across.
+            $ddl = $pdo->query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sku_rack_locations'")->fetch();
+            $ddl = $ddl['sql'] ?? '';
+            if ($ddl === '' || stripos($ddl, 'UNIQUE (bin_code, sku)') !== false) {
+                return;
+            }
+
+            $pdo->exec("PRAGMA foreign_keys = OFF");
+            $pdo->exec("CREATE TABLE sku_rack_locations_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bin_code TEXT NOT NULL,
+                rack_name TEXT NOT NULL,
+                sku TEXT NOT NULL,
+                barcode TEXT,
+                product_name TEXT NOT NULL,
+                category TEXT,
+                notes TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (bin_code, sku)
+            )");
+            $pdo->exec("INSERT INTO sku_rack_locations_new (id, bin_code, rack_name, sku, barcode, product_name, category, notes, created_at, updated_at)
+                        SELECT id, bin_code, rack_name, sku, barcode, product_name, category, notes, created_at, updated_at FROM sku_rack_locations");
+            $pdo->exec("DROP TABLE sku_rack_locations");
+            $pdo->exec("ALTER TABLE sku_rack_locations_new RENAME TO sku_rack_locations");
+            $pdo->exec("CREATE INDEX IF NOT EXISTS idx_sku_rack_sku ON sku_rack_locations (sku)");
+            $pdo->exec("CREATE INDEX IF NOT EXISTS idx_sku_rack_bin ON sku_rack_locations (bin_code)");
+            $pdo->exec("PRAGMA foreign_keys = ON");
+        } catch (Exception $e) {
+            // A failed migration must not take the whole app down; the sync
+            // handler reports the duplicate-key error if this could not run.
+            error_log('sku_rack_locations unique-key migration failed: ' . $e->getMessage());
         }
     }
 }

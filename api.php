@@ -305,25 +305,8 @@ if ($action === 'sync_sku_racks_from_ocs') {
         jsonResp(['status' => 'error', 'message' => 'Gagal login ke OCS Cloud API.'], 500);
     }
 
-    // 1. Fetch Barcode Map from DTO_LookupStockDetailedData
-    $barcodeMap = [];
-    $barcodeUrl = 'https://ocs.iegsystem.id/odata/DTO_LookupStockDetailedData?$top=1000';
-    $chB = curl_init($barcodeUrl);
-    curl_setopt($chB, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($chB, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $token, 'Accept: application/json']);
-    curl_setopt($chB, CURLOPT_SSL_VERIFYPEER, false);
-    $resB = curl_exec($chB);
-    curl_close($chB);
-    if ($resB) {
-        $jsonB = json_decode($resB, true);
-        foreach (($jsonB['value'] ?? []) as $bItem) {
-            $sSku = trim($bItem['SellerSku'] ?? '');
-            $bCode = trim($bItem['Barcode'] ?? '');
-            if (!empty($sSku) && !empty($bCode)) {
-                $barcodeMap[strtoupper($sSku)] = $bCode;
-            }
-        }
-    }
+    // 1. Fetch Barcode Map from DTO_LookupStockDetailedData (paginated)
+    $barcodeMap = ocsApiFetchBarcodeMap($token);
 
     // 2. Fetch all SKU-Rack items from DTO_WmsItems with pagination
     $allWmsItems = [];
@@ -354,6 +337,8 @@ if ($action === 'sync_sku_racks_from_ocs') {
     }
 
     $countSaved = 0;
+    $countSkipped = 0;
+    $firstError = null;
     $pdo->beginTransaction();
     try {
         $stmtCheck = $pdo->prepare("SELECT id FROM sku_rack_locations WHERE UPPER(bin_code) = ? AND UPPER(sku) = ?");
@@ -375,24 +360,53 @@ if ($action === 'sync_sku_racks_from_ocs') {
             $barcode = $barcodeMap[strtoupper($sku)] ?? '';
             $notes = 'Area: ' . ($wItem['AreaId'] ?? 'Pusat');
 
-            $stmtCheck->execute([strtoupper($binCode), strtoupper($sku)]);
-            if ($stmtCheck->fetch()) {
-                $stmtUpdate->execute([$binName, $barcode, $productName, $category, $notes, strtoupper($binCode), strtoupper($sku)]);
-            } else {
-                $stmtInsert->execute([$binCode, $binName, $sku, $barcode, $productName, $category, $notes]);
+            // A single rejected row must never discard the whole batch, so each
+            // upsert is isolated and only counted as skipped when it fails.
+            try {
+                $stmtCheck->execute([strtoupper($binCode), strtoupper($sku)]);
+                if ($stmtCheck->fetch()) {
+                    $stmtUpdate->execute([$binName, $barcode, $productName, $category, $notes, strtoupper($binCode), strtoupper($sku)]);
+                } else {
+                    $stmtInsert->execute([$binCode, $binName, $sku, $barcode, $productName, $category, $notes]);
+                }
+                $countSaved++;
+            } catch (Exception $rowErr) {
+                $countSkipped++;
+                if ($firstError === null) {
+                    $firstError = "{$binCode}/{$sku}: " . $rowErr->getMessage();
+                }
             }
-            $countSaved++;
         }
+
+        // Push the freshly mapped barcodes onto the stock cache so the
+        // "Data Stok OCS" table resolves them by SKU straight away.
+        $stmtBackfill = $pdo->prepare("UPDATE stock_master SET barcode = ? WHERE UPPER(sku) = ? AND (barcode IS NULL OR barcode = '')");
+        $countBarcodeFilled = 0;
+        foreach ($barcodeMap as $mapSku => $mapBarcode) {
+            $stmtBackfill->execute([$mapBarcode, $mapSku]);
+            $countBarcodeFilled += $stmtBackfill->rowCount();
+        }
+
         $pdo->commit();
     } catch (Exception $e) {
         $pdo->rollBack();
         jsonResp(['status' => 'error', 'message' => 'Gagal menyimpan ke database: ' . $e->getMessage()], 500);
     }
 
+    $message = "Berhasil menyinkronkan {$countSaved} pemetaan Lokasi SKU-Rack dari OCS Cloud (https://ocs.iegsystem.id/master/sku-rack).";
+    if ($countBarcodeFilled > 0) {
+        $message .= " {$countBarcodeFilled} barcode diisikan ke Data Stok OCS.";
+    }
+    if ($countSkipped > 0) {
+        $message .= " {$countSkipped} baris dilewati ({$firstError}).";
+    }
+
     jsonResp([
         'status' => 'success',
-        'message' => "Berhasil menyinkronkan {$countSaved} pemetaan Lokasi SKU-Rack dari OCS Cloud (https://ocs.iegsystem.id/master/sku-rack).",
+        'message' => $message,
         'total_synced' => $countSaved,
+        'total_skipped' => $countSkipped,
+        'total_barcode_filled' => $countBarcodeFilled,
         'timestamp' => date('Y-m-d H:i:s')
     ]);
 }
@@ -474,7 +488,17 @@ if ($action === 'delete_sku_rack') {
 
 if ($action === 'get_stocks') {
     $search = trim($input['search'] ?? '');
-    $sql = "SELECT s.id, s.sku, COALESCE(NULLIF(s.barcode, ''), NULLIF(r.barcode, ''), '-') as barcode, s.product_name, s.area_id, s.sap_code, s.qty_on_hand, s.qty_available, s.qty_gudang_kecil, s.qty_gudang_besar, s.is_active, s.last_synced_at, r.bin_code, r.rack_name FROM stock_master s LEFT JOIN sku_rack_locations r ON UPPER(s.sku) = UPPER(r.sku)";
+
+    // A SKU can sit in several bins, so the joined rack columns are aggregated:
+    // a bare column under GROUP BY would pick an arbitrary row and could return
+    // an empty barcode even when another bin for the same SKU carries one.
+    $sql = "SELECT s.id, s.sku,
+                   COALESCE(NULLIF(s.barcode, ''), NULLIF(MAX(r.barcode), ''), '-') as barcode,
+                   s.product_name, s.area_id, s.sap_code, s.qty_on_hand, s.qty_available,
+                   s.qty_gudang_kecil, s.qty_gudang_besar, s.is_active, s.last_synced_at,
+                   MAX(r.bin_code) as bin_code, MAX(r.rack_name) as rack_name
+            FROM stock_master s
+            LEFT JOIN sku_rack_locations r ON UPPER(s.sku) = UPPER(r.sku)";
     $params = [];
 
     if (!empty($search)) {
@@ -483,7 +507,7 @@ if ($action === 'get_stocks') {
         $params = [$term, $term, $term, $term, $term, $term];
     }
 
-    $sql .= " GROUP BY s.sku ORDER BY s.sku ASC LIMIT 500";
+    $sql .= " GROUP BY s.id ORDER BY s.sku ASC LIMIT 500";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
@@ -498,7 +522,9 @@ if ($action === 'sync_all_stock') {
         jsonResp(['status' => 'error', 'message' => 'Gagal login ke OCS Cloud API. Pastikan internet aktif dan kredensial valid.'], 500);
     }
 
-    // Pre-load Barcode map from sku_rack_locations and DTO_LookupStockDetailedData
+    // Pre-load Barcode map from sku_rack_locations and DTO_LookupStockDetailedData.
+    // DTO_WmsItemStockLiteV2 carries no Barcode field, so without this map every
+    // synced row lands with an empty barcode and renders as "-" in the UI.
     $barcodeMap = [];
     try {
         $racks = $pdo->query("SELECT sku, barcode FROM sku_rack_locations WHERE barcode IS NOT NULL AND barcode != ''")->fetchAll();
@@ -506,6 +532,11 @@ if ($action === 'sync_all_stock') {
             $barcodeMap[strtoupper(trim($rk['sku']))] = trim($rk['barcode']);
         }
     } catch (Exception $e) {}
+
+    // OCS is the source of truth, so it overrides anything cached locally.
+    foreach (ocsApiFetchBarcodeMap($token) as $ocsSku => $ocsBarcode) {
+        $barcodeMap[$ocsSku] = $ocsBarcode;
+    }
 
     $items = ocsApiFetchAllStock($token);
     if (empty($items)) {
@@ -564,7 +595,7 @@ if ($action === 'sync_all_stock') {
         } else {
             // SQLite upsert
             $stmtCheck = $pdo->prepare("SELECT id FROM stock_master WHERE UPPER(sku) = ?");
-            $stmtUpdate = $pdo->prepare("UPDATE stock_master SET product_name = ?, barcode = ?, area_id = ?, sap_code = ?, qty_on_hand = ?, qty_available = ?, qty_gudang_kecil = ?, qty_gudang_besar = ?, last_synced_at = CURRENT_TIMESTAMP WHERE UPPER(sku) = ?");
+            $stmtUpdate = $pdo->prepare("UPDATE stock_master SET product_name = ?, barcode = COALESCE(NULLIF(?, ''), barcode), area_id = ?, sap_code = ?, qty_on_hand = ?, qty_available = ?, qty_gudang_kecil = ?, qty_gudang_besar = ?, last_synced_at = CURRENT_TIMESTAMP WHERE UPPER(sku) = ?");
             $stmtInsert = $pdo->prepare("INSERT INTO stock_master (sku, barcode, product_name, area_id, sap_code, qty_on_hand, qty_available, qty_gudang_kecil, qty_gudang_besar, last_synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
 
             foreach ($items as $item) {
@@ -572,7 +603,7 @@ if ($action === 'sync_all_stock') {
                 if (empty($sku)) continue;
 
                 $productName = $item['Name'] ?? '-';
-                $barcode = $item['Barcode'] ?? '';
+                $barcode = trim($item['Barcode'] ?? '') ?: ($barcodeMap[strtoupper($sku)] ?? '');
                 $areaId = $item['AreaId'] ?? 'Pusat';
                 $sapCode = $item['SapCode'] ?? '';
                 $qtyOnHand = (int)($item['QtyOnHand'] ?? 0);
@@ -686,6 +717,53 @@ if (empty($action)) {
 // HELPER FUNCTIONS FOR OCS API INTEGRATION
 // ==============================================================================
 
+
+/**
+ * Builds a SKU => Barcode map from DTO_LookupStockDetailedData.
+ *
+ * This is the only OCS endpoint that carries barcodes: DTO_WmsItemStockLiteV2
+ * (used by the stock sync) has no Barcode field at all, which is why stock rows
+ * showed "-" until the map was wired in. Paginated so it never silently stops
+ * at the first page the server decides to return.
+ */
+function ocsApiFetchBarcodeMap(string $token): array
+{
+    $map = [];
+    $pageSize = 500;
+    $skip = 0;
+
+    for ($page = 0; $page < 40; $page++) {
+        $url = "https://ocs.iegsystem.id/odata/DTO_LookupStockDetailedData?\$top={$pageSize}&\$skip={$skip}";
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $token, 'Accept: application/json']);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        $res = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code !== 200 || empty($res)) break;
+
+        $json = json_decode($res, true);
+        $items = $json['value'] ?? [];
+        if (empty($items)) break;
+
+        foreach ($items as $item) {
+            $sku = strtoupper(trim($item['SellerSku'] ?? ''));
+            $barcode = trim($item['Barcode'] ?? '');
+            if ($sku !== '' && $barcode !== '') {
+                $map[$sku] = $barcode;
+            }
+        }
+
+        $skip += count($items);
+        if (count($items) < $pageSize) break;
+    }
+
+    return $map;
+}
 function ocsApiLogin(): ?string {
     $url = 'https://ocs.iegsystem.id/Auth/Login';
     $payload = json_encode([
