@@ -797,32 +797,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const historyHtml = json.data.map(req => {
                     const rack = req.rack_gudang_besar || '-';
-                    const batch = req.batch_number || '-';
+                    const batchClean = formatBatchDisplay(req.batch_number);
+                    const rawBatchEscaped = (req.batch_number || '').replace(/"/g, '&quot;');
                     const pickedQty = req.picked_qty || req.qty_request;
                     const timeStr = (req.picked_at || req.created_at || '').substring(11, 16);
 
                     return `
-                        <div class="feed-item" style="border-left: 3.5px solid #10b981; background: #ffffff; padding: 0.85rem 1rem; margin-bottom: 0.65rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
-                            <div style="flex: 1;">
-                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
-                                    <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                                        <strong style="color: #0f172a; font-size: 0.88rem;">${req.sku}</strong>
-                                        <span class="loc-bin-tag" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"><i class="fa-solid fa-tag"></i> ${req.bin_code}</span>
-                                    </div>
-                                    <span class="badge-status completed" style="font-size: 0.7rem; padding: 0.2rem 0.55rem;"><i class="fa-solid fa-circle-check"></i> Selesai Direplenish</span>
+                        <div class="history-item-card">
+                            <div class="h-card-header">
+                                <div class="h-card-title-group">
+                                    <strong class="h-sku">${req.sku}</strong>
+                                    <span class="h-bin-pill"><i class="fa-solid fa-tag"></i> ${req.bin_code}</span>
                                 </div>
-                                <div style="font-size: 0.78rem; color: #475569; margin-bottom: 0.45rem; font-weight: 500; line-height: 1.35;">
-                                    ${req.product_name}
+                                <span class="h-status-badge"><i class="fa-solid fa-circle-check"></i> Selesai</span>
+                            </div>
+                            <div class="h-product-title">
+                                ${req.product_name}
+                            </div>
+                            <div class="h-specs-box">
+                                <div class="h-spec-col">
+                                    <span class="h-spec-lbl"><i class="fa-solid fa-boxes-stacked"></i> Qty Selesai</span>
+                                    <strong class="h-spec-val qty">${pickedQty} Pcs</strong>
                                 </div>
-                                <div style="display: flex; gap: 0.6rem; font-size: 0.74rem; color: #334155; flex-wrap: wrap; background: #f8fafc; padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid #e2e8f0;">
-                                    <span><i class="fa-solid fa-boxes-stacked" style="color: var(--primary);"></i> Qty: <strong style="color: var(--primary);">${pickedQty} Pcs</strong></span>
-                                    <span><i class="fa-solid fa-warehouse" style="color: #ea580c;"></i> Rak GB: <strong style="color: #c2410c;">${rack}</strong></span>
-                                    <span><i class="fa-solid fa-barcode" style="color: #4f46e5;"></i> Batch: <strong style="color: #4338ca;">${batch}</strong></span>
+                                <div class="h-spec-col">
+                                    <span class="h-spec-lbl"><i class="fa-solid fa-warehouse"></i> Rak Gudang Besar</span>
+                                    <strong class="h-spec-val rack">${rack}</strong>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.4rem; font-size: 0.7rem; color: #94a3b8;">
-                                    <span><i class="fa-solid fa-user-check" style="color: #10b981;"></i> Oleh: <strong>${req.picked_by || req.processed_by || 'Operator Gudang'}</strong></span>
-                                    <span><i class="fa-regular fa-clock"></i> ${timeStr} WIB</span>
+                                <div class="h-spec-col full-w">
+                                    <span class="h-spec-lbl"><i class="fa-solid fa-barcode"></i> Batch Number</span>
+                                    <strong class="h-spec-val batch" title="${rawBatchEscaped}">${batchClean}</strong>
                                 </div>
+                            </div>
+                            <div class="h-card-footer">
+                                <span class="h-user-info"><i class="fa-solid fa-user-check"></i> Oleh: <strong>${req.picked_by || req.processed_by || 'Operator Gudang'}</strong></span>
+                                <span class="h-time-info"><i class="fa-regular fa-clock"></i> ${timeStr} WIB</span>
                             </div>
                         </div>
                     `;
@@ -1158,22 +1166,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     <!-- Card Header (Tappable to Minimize / Maximize) -->
                     <div class="task-card-header" onclick="toggleTaskCollapse('${task.id}', event)">
-                        <div class="task-header-main">
-                            <div class="task-no-row">
-                                <span class="task-no">#${task.request_no}</span>
-                                <span class="badge-status ${statusClass}">${statusText}</span>
-                            </div>
-                            <!-- Compact preview row when card is collapsed -->
-                            <div class="task-compact-preview">
-                                <span class="preview-prod-title">${task.product_name || task.sku}</span>
-                                <span class="preview-details-pill">
-                                    <i class="fa-solid fa-location-dot"></i> ${task.bin_code} • <strong>${task.qty_request} Pcs</strong>
+                        <div class="task-header-row-top">
+                            <div class="task-meta-left">
+                                <span class="task-req-badge">#${task.request_no}</span>
+                                <span class="task-status-pill ${statusClass}">
+                                    <i class="fa-solid fa-${isCompleted ? 'circle-check' : 'clock'}"></i>
+                                    ${isCompleted ? 'Selesai' : 'Menunggu Pick'}
                                 </span>
                             </div>
+                            <button type="button" class="btn-card-toggle" title="${isCollapsed ? 'Maximize (Buka Detail)' : 'Minimize (Ciutkan)'}">
+                                <i class="fa-solid fa-chevron-${isCollapsed ? 'down' : 'up'}"></i>
+                            </button>
                         </div>
-                        <button type="button" class="btn-card-toggle" title="${isCollapsed ? 'Maximize (Buka Detail)' : 'Minimize (Ciutkan)'}">
-                            <i class="fa-solid fa-chevron-${isCollapsed ? 'down' : 'up'}"></i>
-                        </button>
+
+                        <!-- Compact preview row when card is collapsed -->
+                        <div class="task-compact-preview">
+                            <div class="preview-product-name" title="${task.product_name || task.sku}">
+                                ${task.product_name || task.sku}
+                            </div>
+                            <div class="preview-chips-flex">
+                                <span class="preview-chip loc"><i class="fa-solid fa-location-dot"></i> Rak: <strong>${task.bin_code}</strong></span>
+                                <span class="preview-chip qty"><i class="fa-solid fa-layer-group"></i> <strong>${task.qty_request} Pcs</strong></span>
+                                ${isCompleted && task.rack_gudang_besar ? `<span class="preview-chip gb"><i class="fa-solid fa-warehouse"></i> ${task.rack_gudang_besar}</span>` : ''}
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Collapsible Card Body -->
