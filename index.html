@@ -22,6 +22,26 @@
 
   <!-- Stylesheet -->
   <link rel="stylesheet" href="style.css?v=4.3">
+
+  <!-- Instant session restore to eliminate refresh flicker -->
+  <script>
+    (function () {
+      try {
+        var raw = localStorage.getItem('ocsWmsSession');
+        if (raw) {
+          var s = JSON.parse(raw);
+          if (s && s.user) {
+            document.documentElement.classList.add('has-auth-session');
+          }
+        }
+      } catch (e) { }
+    })();
+  </script>
+  <style>
+    html.has-auth-session #viewLogin {
+      display: none !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -32,7 +52,7 @@
   <!-- ========================================================================= -->
   <!-- 1. LOGIN SCREEN (IEG OCS THEME) -->
   <!-- ========================================================================= -->
-  <div id="viewLogin" class="app-view active">
+  <div id="viewLogin" class="app-view">
     <div class="ieg-login-screen">
 
       <!-- Left Hero Column -->
@@ -89,7 +109,35 @@
               </div>
             </div>
             <h3>Masuk ke Akun Anda</h3>
-            <p>Silakan isi data di bawah untuk melanjutkan</p>
+            <p>Silakan pilih role atau isi akun di bawah untuk melanjutkan</p>
+          </div>
+
+          <!-- Quick Role Selector Demo -->
+          <div class="quick-role-picker">
+            <span class="quick-role-title">Pilih Akun Demo 1-Klik:</span>
+            <div class="quick-role-buttons">
+              <button type="button" class="btn-role-quick kecil" onclick="quickLogin('gudang_kecil', 'operator123')">
+                <i class="fa-solid fa-box-open"></i>
+                <div>
+                  <strong>Gudang Kecil</strong>
+                  <small>Request Replenish</small>
+                </div>
+              </button>
+              <button type="button" class="btn-role-quick besar" onclick="quickLogin('gudang_besar', 'operator123')">
+                <i class="fa-solid fa-dolly"></i>
+                <div>
+                  <strong>Gudang Besar</strong>
+                  <small>Task Pick Barang</small>
+                </div>
+              </button>
+              <button type="button" class="btn-role-quick admin" onclick="quickLogin('admin', 'admin123')">
+                <i class="fa-solid fa-shield-halved"></i>
+                <div>
+                  <strong>Administrator</strong>
+                  <small>Panel ERP WMS</small>
+                </div>
+              </button>
+            </div>
           </div>
 
           <form id="formLogin" class="ieg-auth-form">
@@ -299,7 +347,54 @@
 
         </section>
 
-        <!-- TAB 2: STOCK SEARCH (MOBILE) -->
+        <!-- TAB 2: TASK PICK GUDANG BESAR (OPERATOR GUDANG BESAR) -->
+        <section id="opTabPickTask" class="mobile-tab-view">
+          <div class="pick-tasks-card">
+            <div class="pick-tasks-header">
+              <div class="pick-title-group">
+                <div class="pick-header-icon"><i class="fa-solid fa-cart-flatbed"></i></div>
+                <div>
+                  <h3 class="pick-heading">Task Pick Gudang Besar</h3>
+                  <p class="pick-subheading">Daftar permintaan replenish dari Operator Gudang Kecil</p>
+                </div>
+              </div>
+              <button type="button" class="btn-clean-refresh" onclick="loadPickTasks()" title="Muat Ulang Task">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+            </div>
+
+            <!-- Task Status Filters -->
+            <div class="pick-status-filters" id="pickStatusFilters">
+              <button type="button" class="pick-filter-chip active" data-status="PENDING" onclick="filterPickTasks('PENDING', this)">
+                <i class="fa-solid fa-clock"></i>
+                <span>Menunggu Pick</span>
+                <span class="chip-count" id="badgePickPending">0</span>
+              </button>
+              <button type="button" class="pick-filter-chip" data-status="COMPLETED" onclick="filterPickTasks('COMPLETED', this)">
+                <i class="fa-solid fa-check-double"></i>
+                <span>Selesai</span>
+                <span class="chip-count completed" id="badgePickCompleted">0</span>
+              </button>
+              <button type="button" class="pick-filter-chip" data-status="ALL" onclick="filterPickTasks('ALL', this)">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>Semua</span>
+              </button>
+            </div>
+
+            <!-- Search input inside Task Pick -->
+            <div class="pick-search-bar">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="inputSearchPickTasks" placeholder="Cari SKU, Nama Barang, atau No. Request..." oninput="searchPickTasks(this.value)">
+            </div>
+
+            <!-- Task Cards List Feed -->
+            <div class="pick-tasks-feed" id="pickTasksFeed">
+              <div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat antrean task pick...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: STOCK SEARCH (MOBILE) -->
         <section id="opTabStockSearch" class="mobile-tab-view">
           <div class="stock-search-card">
             <div class="search-field-pill">
@@ -313,7 +408,7 @@
           </div>
         </section>
 
-        <!-- TAB 3: REPLENISH HISTORY FULL (MOBILE) -->
+        <!-- TAB 4: REPLENISH HISTORY FULL (MOBILE) -->
         <section id="opTabHistory" class="mobile-tab-view">
           <div class="history-full-card">
             <div class="card-header-flex">
@@ -326,14 +421,14 @@
           </div>
         </section>
 
-        <!-- TAB 4: OPERATOR PROFILE (MOBILE) -->
+        <!-- TAB 5: OPERATOR PROFILE (MOBILE) -->
         <section id="opTabProfile" class="mobile-tab-view">
           <div class="profile-mobile-card">
             <div class="profile-big-avatar">
               <i class="fa-solid fa-user-shield"></i>
             </div>
             <h3 id="opProfileName">Operator Gudang 1</h3>
-            <span class="profile-role-tag">Operator Inventory Mobile</span>
+            <span class="profile-role-tag" id="opProfileRoleTag">Operator Inventory Mobile</span>
 
             <div class="profile-metrics-row">
               <div class="metric-box">
@@ -356,19 +451,24 @@
 
       <!-- Native Mobile Bottom Tab Bar -->
       <nav class="mobile-bottom-navbar">
-        <button class="bottom-tab-item active" onclick="switchMobileTab('opTabScan', this)">
-          <i class="fa-solid fa-barcode"></i>
-          <span>Scan Bin</span>
+        <button class="bottom-tab-item active" id="btnNavScan" onclick="switchMobileTab('opTabScan', this)">
+          <i class="fa-solid fa-box-open"></i>
+          <span>Replenish</span>
         </button>
-        <button class="bottom-tab-item" onclick="switchMobileTab('opTabStockSearch', this)">
+        <button class="bottom-tab-item" id="btnNavPickTask" onclick="switchMobileTab('opTabPickTask', this)">
+          <i class="fa-solid fa-cart-flatbed"></i>
+          <span>Task Pick</span>
+          <span class="nav-bubble-count" id="bubblePickTask" style="display: none;">0</span>
+        </button>
+        <button class="bottom-tab-item" id="btnNavStockSearch" onclick="switchMobileTab('opTabStockSearch', this)">
           <i class="fa-solid fa-boxes-stacked"></i>
           <span>Cek Stok</span>
         </button>
-        <button class="bottom-tab-item" onclick="switchMobileTab('opTabHistory', this)">
+        <button class="bottom-tab-item" id="btnNavHistory" onclick="switchMobileTab('opTabHistory', this)">
           <i class="fa-solid fa-clock-rotate-left"></i>
           <span>Riwayat</span>
         </button>
-        <button class="bottom-tab-item" onclick="switchMobileTab('opTabProfile', this)">
+        <button class="bottom-tab-item" id="btnNavProfile" onclick="switchMobileTab('opTabProfile', this)">
           <i class="fa-solid fa-user"></i>
           <span>Akun</span>
         </button>
@@ -789,14 +889,14 @@
                     <tr>
                       <th>No. Request</th>
                       <th>Waktu</th>
-                      <th>Bin Code</th>
+                      <th>Rak Gudang Kecil</th>
                       <th>SKU & Nama Produk</th>
-                      <th class="td-right">Gudang Kecil</th>
-                      <th class="td-right">Gudang Besar</th>
                       <th class="td-right">Qty Diajukan</th>
-                      <th>Diajukan Oleh</th>
+                      <th>Pemohon</th>
+                      <th>Rak Gudang Besar</th>
+                      <th>Batch Number</th>
                       <th>Status</th>
-                      <th class="td-center">Tindakan Admin</th>
+                      <th class="td-center">Tindakan</th>
                     </tr>
                   </thead>
                   <tbody id="adminReplenishTableBody">
@@ -1105,8 +1205,10 @@
         <div class="field-item">
           <label for="userFormRole">Role / Hak Akses <span class="req">*</span></label>
           <select id="userFormRole" required>
-            <option value="operator">Operator Inventory (Tampilan Mobile Android / iOS)</option>
-            <option value="admin">Administrator Inventory (Panel Admin)</option>
+            <option value="gudang_kecil">Operator Gudang Kecil (Request Replenish)</option>
+            <option value="gudang_besar">Operator Gudang Besar (Task Pick Barang)</option>
+            <option value="admin">Administrator Inventory (Panel Admin ERP)</option>
+            <option value="operator">Operator Umum (Mobile PDA)</option>
           </select>
         </div>
 
@@ -1124,11 +1226,101 @@
   </div>
 
 
+  <!-- ========================================================================= -->
+  <!-- MODAL: TASK PICK GUDANG BESAR (INPUT RAK & BATCH NUMBER) -->
+  <!-- ========================================================================= -->
+  <div id="modalPickTask" class="clean-modal-overlay">
+    <div class="form-modal-box modal-pick-task-box">
+      <div class="form-modal-header pick-header-accent">
+        <div>
+          <span class="role-badge-pill"><i class="fa-solid fa-warehouse"></i> Gudang Besar</span>
+          <h3 id="modalPickTaskTitle">Pick Barang Replenish</h3>
+          <p class="modal-subtext" id="modalPickReqNo">REP-XXXXXXXX</p>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeModal('modalPickTask')">&times;</button>
+      </div>
+
+      <!-- Detail Barang yang Diminta -->
+      <div class="pick-product-summary">
+        <h4 id="pickProdName" class="pick-prod-title">Nama Barang</h4>
+        <div class="pick-meta-tags">
+          <span class="p-pill"><i class="fa-solid fa-box"></i> SKU: <strong id="pickSku">-</strong></span>
+          <span class="p-pill"><i class="fa-solid fa-location-dot"></i> Rak Tujuan (Gudang Kecil): <strong id="pickDestBin">-</strong></span>
+        </div>
+        <div class="pick-stock-comparison-row">
+          <div class="pick-stat-col">
+            <small>Jumlah Diminta</small>
+            <strong id="pickQtyRequested" class="stat-highlight requested">0 Pcs</strong>
+          </div>
+          <div class="pick-stat-col">
+            <small>Stok Gudang Besar</small>
+            <strong id="pickAvailableBesar" class="stat-highlight available">0 Pcs</strong>
+          </div>
+          <div class="pick-stat-col">
+            <small>Pemohon</small>
+            <strong id="pickRequestedBy" class="stat-highlight requester">-</strong>
+          </div>
+        </div>
+      </div>
+
+      <form id="formCompletePick" class="form-modal-body" onsubmit="submitPickTask(event)">
+        <input type="hidden" id="pickTaskId" value="">
+
+        <!-- Input 1: Lokasi Rack Gudang Besar -->
+        <div class="field-item">
+          <label for="inputPickRackBesar">Lokasi Rack Gudang Besar <span class="req">*</span></label>
+          <div class="input-with-action">
+            <i class="fa-solid fa-warehouse input-ico-left"></i>
+            <input type="text" id="inputPickRackBesar" placeholder="Contoh: GB-RAK-01, PL-BULK-A2" required autocomplete="off">
+            <button type="button" class="btn-input-suggest" onclick="suggestPickRack()" title="Saran Otomatis Lokasi Rak">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Auto
+            </button>
+          </div>
+          <small class="field-hint">Ketik atau scan barcode lokasi rak Gudang Besar tempat barang diambil</small>
+        </div>
+
+        <!-- Input 2: Batch Number -->
+        <div class="field-item">
+          <label for="inputPickBatchNumber">Batch Number / Nomor Lot <span class="req">*</span></label>
+          <div class="input-with-action">
+            <i class="fa-solid fa-barcode input-ico-left"></i>
+            <input type="text" id="inputPickBatchNumber" placeholder="Contoh: BATCH-2026-X1, LOT-0926" required autocomplete="off">
+            <button type="button" class="btn-input-suggest" onclick="generateDemoBatch()" title="Generate Batch">
+              <i class="fa-solid fa-bolt"></i> Auto
+            </button>
+          </div>
+          <small class="field-hint">Nomor batch / lot produksi barang yang diambil</small>
+        </div>
+
+        <!-- Input 3: Qty Picked -->
+        <div class="field-item">
+          <label for="inputPickQty">Jumlah yang Di-pick (Pcs) <span class="req">*</span></label>
+          <input type="number" id="inputPickQty" min="1" required>
+          <small class="field-hint">Sesuaikan jika stok diambil sebagian atau penuh</small>
+        </div>
+
+        <!-- Input 4: Catatan Picker -->
+        <div class="field-item">
+          <label for="inputPickNotes">Catatan Tambahan (Opsional)</label>
+          <input type="text" id="inputPickNotes" placeholder="Misal: Barang mulus, kardus utuh">
+        </div>
+
+        <div class="form-modal-footer">
+          <button type="button" class="btn-secondary-clean" onclick="closeModal('modalPickTask')">Batal</button>
+          <button type="submit" id="btnSubmitPick" class="btn-primary-clean btn-pick-confirm">
+            <i class="fa-solid fa-check"></i> Selesaikan Pick & Transfer Stok
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
   <!-- Toast Alerts Container -->
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=4.2"></script>
+  <script src="app.js?v=4.3"></script>
 </body>
 
 </html>

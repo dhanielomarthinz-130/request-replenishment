@@ -33,14 +33,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function writeCachedSession(user, activeTab) {
+    function writeCachedSession(user, activeTab, sessionToken) {
         try {
             if (!user) {
                 localStorage.removeItem(SESSION_CACHE_KEY);
+                localStorage.removeItem('ocsSessionToken');
+                document.documentElement.classList.remove('has-auth-session');
                 return;
             }
             localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user, activeTab: activeTab || null }));
-        } catch (err) { /* private mode / quota - fall back to server session only */ }
+            if (sessionToken) {
+                localStorage.setItem('ocsSessionToken', sessionToken);
+            }
+            document.documentElement.classList.add('has-auth-session');
+        } catch (err) { /* private mode / quota */ }
     }
 
     // DOM Elements - Views
@@ -155,10 +161,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (AppState.user) {
                 operatorDisplayName.textContent = AppState.user.full_name || AppState.user.username;
                 if (opProfileName) opProfileName.textContent = AppState.user.full_name;
+
+                const opBadge = document.querySelector('.warehouse-badge');
+                if (opBadge) {
+                    if (AppState.user.role === 'gudang_besar') {
+                        opBadge.innerHTML = `<i class="fa-solid fa-warehouse"></i> Gudang Besar (Bulk & Pick)`;
+                        opBadge.classList.add('gudang-besar');
+                    } else {
+                        opBadge.innerHTML = `<i class="fa-solid fa-box-open"></i> Gudang Kecil (Picking)`;
+                        opBadge.classList.remove('gudang-besar');
+                    }
+                }
+
+                const opTag = document.getElementById('opProfileRoleTag');
+                if (opTag) {
+                    opTag.textContent = AppState.user.role === 'gudang_besar' ? 'Operator Gudang Besar (Task Pick)' : 'Operator Gudang Kecil (Request Replenish)';
+                }
             }
             setTimeout(() => inputBinCode && inputBinCode.focus(), 250);
             loadOperatorHistory();
             loadOpStockSearchList();
+            loadPickTasks();
         } else if (viewName === 'admin') {
             viewAdmin.classList.add('active');
             if (AppState.user) {
@@ -175,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================================
-    // 2. AUTHENTICATION
+    // 2. AUTHENTICATION & SESSION HANDLING
     // =========================================================================
 
     function routeForUser(user, preferredTab) {
@@ -184,35 +207,51 @@ document.addEventListener('DOMContentLoaded', () => {
             switchView('admin');
             const tab = preferredTab || AppState.activeAdminTab || 'tabDashboard';
             if (document.getElementById(tab)) switchAdminTab(tab);
-        } else {
+        } else if (user.role === 'gudang_besar') {
             switchView('operator');
+            const btnPick = document.getElementById('btnNavPickTask');
+            if (preferredTab && document.getElementById(preferredTab)) {
+                switchMobileTab(preferredTab);
+            } else {
+                switchMobileTab('opTabPickTask', btnPick);
+            }
+        } else {
+            // Role gudang_kecil or legacy operator
+            switchView('operator');
+            const btnScan = document.getElementById('btnNavScan');
+            if (preferredTab && document.getElementById(preferredTab)) {
+                switchMobileTab(preferredTab);
+            } else {
+                switchMobileTab('opTabScan', btnScan);
+            }
         }
     }
 
     async function checkSession() {
-        // Optimistic restore first so a refresh does not flash the login form.
         const cached = readCachedSession();
         if (cached && cached.user) {
             routeForUser(cached.user, cached.activeTab);
+        } else {
+            switchView('login');
         }
 
         try {
-            const res = await fetch('api.php?action=check_session', { credentials: 'same-origin', cache: 'no-store' });
+            const token = localStorage.getItem('ocsSessionToken') || '';
+            const url = 'api.php?action=check_session' + (token ? `&session_token=${encodeURIComponent(token)}` : '');
+            const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
             const data = await res.json();
             if (data.logged_in && data.user) {
+                AppState.user = data.user;
                 if (!cached || !cached.user || cached.user.username !== data.user.username) {
                     routeForUser(data.user, cached ? cached.activeTab : null);
-                } else {
-                    AppState.user = data.user;
                 }
-                writeCachedSession(data.user, AppState.activeAdminTab);
+                writeCachedSession(data.user, AppState.activeAdminTab, data.session_token || token);
             } else {
                 writeCachedSession(null);
                 switchView('login');
             }
         } catch (err) {
-            // Network hiccup only: keep the optimistic view rather than kicking
-            // the user out of a session the server may still consider valid.
+            // Keep optimistic view on connection error
             if (!cached || !cached.user) switchView('login');
         }
     }
@@ -239,18 +278,14 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('username', username);
             formData.append('password', password);
 
-            const res = await fetch('api.php', { method: 'POST', body: formData });
+            const res = await fetch('api.php', { method: 'POST', body: formData, credentials: 'same-origin' });
             const data = await res.json();
 
             if (data.status === 'success') {
                 AppState.user = data.user;
-                writeCachedSession(data.user, 'tabDashboard');
+                writeCachedSession(data.user, data.user.role === 'admin' ? 'tabDashboard' : (data.user.role === 'gudang_besar' ? 'opTabPickTask' : 'opTabScan'), data.session_token);
                 showToast(`Login berhasil sebagai ${data.user.full_name}`, 'success');
-                if (data.user.role === 'admin') {
-                    switchView('admin');
-                } else {
-                    switchView('operator');
-                }
+                routeForUser(data.user);
             } else {
                 showToast(data.message || 'Username atau password salah.', 'error');
             }
@@ -258,14 +293,14 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Gagal terhubung ke server API.', 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = `<span>Masuk ke Sistem</span> <i class="fa-solid fa-arrow-right"></i>`;
+            btn.innerHTML = `<span>Masuk</span> <i class="fa-solid fa-arrow-right-to-bracket"></i>`;
         }
     }
 
     window.logoutApp = async function() {
         writeCachedSession(null);
         try {
-            await fetch('api.php?action=logout');
+            await fetch('api.php?action=logout', { credentials: 'same-origin' });
             AppState.user = null;
             AppState.currentScannedItem = null;
             showToast('Berhasil logout.', 'info');
@@ -283,12 +318,22 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.mobile-bottom-navbar .bottom-tab-item').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.mobile-main-body .mobile-tab-view').forEach(p => p.classList.remove('active'));
 
-        btn.classList.add('active');
+        if (!btn) {
+            btn = document.querySelector(`.mobile-bottom-navbar .bottom-tab-item[onclick*="${tabId}"]`);
+        }
+        if (btn) btn.classList.add('active');
+
         const target = document.getElementById(tabId);
         if (target) target.classList.add('active');
 
+        if (AppState.user) {
+            writeCachedSession(AppState.user, tabId, localStorage.getItem('ocsSessionToken'));
+        }
+
         if (tabId === 'opTabScan') {
             setTimeout(() => inputBinCode && inputBinCode.focus(), 200);
+        } else if (tabId === 'opTabPickTask') {
+            loadPickTasks();
         } else if (tabId === 'opTabStockSearch') {
             loadOpStockSearchList();
         } else if (tabId === 'opTabHistory') {
@@ -610,11 +655,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         'REJECTED': 'Ditolak'
                     }[req.status] || req.status;
 
+                    let pickMeta = '';
+                    if (req.status === 'COMPLETED' && (req.rack_gudang_besar || req.batch_number)) {
+                        pickMeta = `
+                            <div style="font-size: 0.72rem; color: #059669; margin-top: 0.2rem; display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                                <span><i class="fa-solid fa-warehouse"></i> Rak: <strong>${req.rack_gudang_besar || '-'}</strong></span>
+                                <span><i class="fa-solid fa-barcode"></i> Batch: <strong>${req.batch_number || '-'}</strong></span>
+                            </div>
+                        `;
+                    }
+
                     return `
                         <div class="feed-item">
                             <div>
                                 <strong>${req.sku} (${req.bin_code})</strong>
                                 <small>${req.product_name} • ${req.qty_request} Pcs</small>
+                                ${pickMeta}
                             </div>
                             <span class="badge-status ${statusClass}">${statusLabel}</span>
                         </div>
@@ -630,6 +686,253 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (fullList) fullList.innerHTML = `<div class="empty-feed">Belum ada data riwayat.</div>`;
             }
         } catch (err) {}
+    };
+
+    // =========================================================================
+    // 3B. TASK PICK GUDANG BESAR (OPERATOR GUDANG BESAR)
+    // =========================================================================
+
+    AppState.pickTasks = [];
+    AppState.activePickFilter = 'PENDING';
+    let pickTaskSearchTerm = '';
+
+    window.loadPickTasks = async function() {
+        const feed = document.getElementById('pickTasksFeed');
+        if (!feed) return;
+        feed.innerHTML = `<div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat task pick...</div>`;
+
+        try {
+            const res = await fetch('api.php?action=get_replenish_requests&limit=100', { credentials: 'same-origin' });
+            const json = await res.json();
+            if (json.status === 'success') {
+                AppState.pickTasks = json.data || [];
+                updatePickCounters();
+                renderPickTasks();
+            } else {
+                feed.innerHTML = `<div class="empty-feed text-danger">Gagal memuat task: ${json.message}</div>`;
+            }
+        } catch (err) {
+            feed.innerHTML = `<div class="empty-feed text-danger">Gagal menghubungi server: ${err.message}</div>`;
+        }
+    };
+
+    function updatePickCounters() {
+        const pendingCount = AppState.pickTasks.filter(t => t.status === 'PENDING').length;
+        const completedCount = AppState.pickTasks.filter(t => t.status === 'COMPLETED').length;
+
+        const badgeP = document.getElementById('badgePickPending');
+        if (badgeP) badgeP.textContent = pendingCount;
+        const badgeC = document.getElementById('badgePickCompleted');
+        if (badgeC) badgeC.textContent = completedCount;
+
+        const bubble = document.getElementById('bubblePickTask');
+        if (bubble) {
+            if (pendingCount > 0) {
+                bubble.textContent = pendingCount;
+                bubble.style.display = 'inline-flex';
+            } else {
+                bubble.style.display = 'none';
+            }
+        }
+    }
+
+    window.filterPickTasks = function(status, btn) {
+        AppState.activePickFilter = status;
+        document.querySelectorAll('.pick-filter-chip').forEach(c => c.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        renderPickTasks();
+    };
+
+    window.searchPickTasks = function(term) {
+        pickTaskSearchTerm = (term || '').trim().toLowerCase();
+        renderPickTasks();
+    };
+
+    function renderPickTasks() {
+        const feed = document.getElementById('pickTasksFeed');
+        if (!feed) return;
+
+        let filtered = AppState.pickTasks;
+        if (AppState.activePickFilter !== 'ALL') {
+            filtered = filtered.filter(t => t.status === AppState.activePickFilter);
+        }
+        if (pickTaskSearchTerm) {
+            filtered = filtered.filter(t => 
+                (t.sku || '').toLowerCase().includes(pickTaskSearchTerm) ||
+                (t.product_name || '').toLowerCase().includes(pickTaskSearchTerm) ||
+                (t.request_no || '').toLowerCase().includes(pickTaskSearchTerm) ||
+                (t.bin_code || '').toLowerCase().includes(pickTaskSearchTerm) ||
+                (t.requested_by || '').toLowerCase().includes(pickTaskSearchTerm)
+            );
+        }
+
+        if (filtered.length === 0) {
+            feed.innerHTML = `
+                <div class="empty-feed">
+                    <i class="fa-solid fa-clipboard-check" style="font-size: 2rem; opacity: 0.35; margin-bottom: 0.5rem; display: block;"></i>
+                    Tidak ada task pick yang sesuai kriteria.
+                </div>
+            `;
+            return;
+        }
+
+        feed.innerHTML = filtered.map(task => {
+            const isPending = task.status === 'PENDING';
+            const isCompleted = task.status === 'COMPLETED';
+            const statusClass = isPending ? 'pending' : (isCompleted ? 'completed' : 'rejected');
+            const statusText = isPending ? 'Menunggu Pick' : (isCompleted ? 'Selesai Dipick' : task.status);
+
+            let actionArea = '';
+            if (isPending) {
+                actionArea = `
+                    <button type="button" class="btn-pick-action" onclick='openPickModal(${JSON.stringify(task).replace(/'/g, "&#39;")})'>
+                        <i class="fa-solid fa-dolly"></i> Ambil Barang (Pick)
+                    </button>
+                `;
+            } else if (isCompleted) {
+                actionArea = `
+                    <div class="pick-completed-info">
+                        <div class="completed-badge-row">
+                            <span class="info-pill gb-rack"><i class="fa-solid fa-warehouse"></i> Rak: <strong>${task.rack_gudang_besar || '-'}</strong></span>
+                            <span class="info-pill batch"><i class="fa-solid fa-barcode"></i> Batch: <strong>${task.batch_number || '-'}</strong></span>
+                        </div>
+                        <small class="completed-meta">Dipick oleh <strong>${task.picked_by || task.processed_by || 'Operator GB'}</strong> • ${task.picked_qty || task.qty_request} Pcs</small>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="pick-task-card ${statusClass}">
+                    <div class="task-card-header">
+                        <div class="task-no-group">
+                            <span class="task-no">${task.request_no}</span>
+                            <span class="task-time"><i class="fa-regular fa-clock"></i> ${(task.created_at || '').substring(0, 16)}</span>
+                        </div>
+                        <span class="badge-status ${statusClass}">${statusText}</span>
+                    </div>
+
+                    <div class="task-location-row">
+                        <span class="loc-bin-tag"><i class="fa-solid fa-location-dot"></i> Rak Tujuan: <strong>${task.bin_code}</strong></span>
+                        <span class="requester-tag"><i class="fa-solid fa-user"></i> ${task.requested_by}</span>
+                    </div>
+
+                    <div class="task-prod-info">
+                        <h4 class="task-prod-name">${task.product_name}</h4>
+                        <div class="task-prod-meta">
+                            <span>SKU: <strong>${task.sku}</strong></span>
+                            <span>Barcode: ${task.barcode || '-'}</span>
+                        </div>
+                    </div>
+
+                    <div class="task-qty-boxes">
+                        <div class="qty-box requested">
+                            <small>Diminta Gudang Kecil</small>
+                            <strong>${task.qty_request} Pcs</strong>
+                        </div>
+                        <div class="qty-box besar">
+                            <small>Stok Gudang Besar</small>
+                            <strong>${task.qty_gudang_besar} Pcs</strong>
+                        </div>
+                    </div>
+
+                    ${actionArea}
+                </div>
+            `;
+        }).join('');
+    }
+
+    window.openPickModal = function(task) {
+        document.getElementById('pickTaskId').value = task.id;
+        document.getElementById('modalPickReqNo').textContent = task.request_no;
+        document.getElementById('pickProdName').textContent = task.product_name;
+        document.getElementById('pickSku').textContent = task.sku;
+        document.getElementById('pickDestBin').textContent = task.bin_code;
+        document.getElementById('pickQtyRequested').textContent = `${task.qty_request} Pcs`;
+        document.getElementById('pickAvailableBesar').textContent = `${task.qty_gudang_besar} Pcs`;
+        document.getElementById('pickRequestedBy').textContent = task.requested_by;
+
+        const inputQty = document.getElementById('inputPickQty');
+        inputQty.value = task.qty_request;
+        inputQty.max = task.qty_gudang_besar;
+
+        document.getElementById('inputPickRackBesar').value = '';
+        document.getElementById('inputPickBatchNumber').value = '';
+        document.getElementById('inputPickNotes').value = '';
+
+        openModal('modalPickTask');
+        setTimeout(() => document.getElementById('inputPickRackBesar').focus(), 150);
+    };
+
+    window.suggestPickRack = function() {
+        const racks = ['GB-RAK-01', 'GB-RAK-02', 'GB-B01-01', 'GB-B02-01', 'GB-C03-01', 'GB-BULK-A1'];
+        const randomRack = racks[Math.floor(Math.random() * racks.length)];
+        document.getElementById('inputPickRackBesar').value = randomRack;
+        showToast(`Lokasi rak Gudang Besar diisi: ${randomRack}`, 'info');
+    };
+
+    window.generateDemoBatch = function() {
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const randomLetter = String.fromCharCode(65 + Math.floor(Math.random() * 6));
+        const randomNum = Math.floor(100 + Math.random() * 900);
+        const batch = `BATCH-${dateStr}-${randomLetter}${randomNum}`;
+        document.getElementById('inputPickBatchNumber').value = batch;
+        showToast(`Batch number diisi: ${batch}`, 'info');
+    };
+
+    window.submitPickTask = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('pickTaskId').value;
+        const rackBesar = document.getElementById('inputPickRackBesar').value.trim();
+        const batchNumber = document.getElementById('inputPickBatchNumber').value.trim();
+        const pickedQty = parseInt(document.getElementById('inputPickQty').value, 10);
+        const notes = document.getElementById('inputPickNotes').value.trim();
+
+        if (!rackBesar) {
+            showToast('Lokasi Rack Gudang Besar wajib diisi.', 'warning');
+            return;
+        }
+        if (!batchNumber) {
+            showToast('Batch Number barang wajib diisi.', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('btnSubmitPick');
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Memproses Pick...`;
+
+        try {
+            const formData = new FormData();
+            formData.append('action', 'complete_pick_task');
+            formData.append('id', id);
+            formData.append('rack_gudang_besar', rackBesar);
+            formData.append('batch_number', batchNumber);
+            formData.append('picked_qty', pickedQty);
+            formData.append('notes', notes);
+
+            const res = await fetch('api.php', { method: 'POST', body: formData, credentials: 'same-origin' });
+            const json = await res.json();
+
+            if (json.status === 'success') {
+                showToast(json.message, 'success');
+                closeModal('modalPickTask');
+                loadPickTasks();
+                loadOperatorHistory();
+                loadOpStockSearchList();
+                if (document.getElementById('tabDashboard') && document.getElementById('tabDashboard').classList.contains('active')) {
+                    loadDashboardStats();
+                }
+                if (document.getElementById('tabReplenish') && document.getElementById('tabReplenish').classList.contains('active')) {
+                    loadAdminReplenish();
+                }
+            } else {
+                showToast(json.message || 'Gagal menyelesaikan task pick.', 'error');
+            }
+        } catch (err) {
+            showToast('Gagal menghubungi server: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fa-solid fa-check"></i> Selesaikan Pick & Transfer Stok`;
+        }
     };
 
     window.loadOpStockSearchList = async function() {
@@ -1022,19 +1325,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isPending) {
                 actionsHtml = `
                     <div style="display: flex; gap: 0.35rem; justify-content: center;">
-                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; background: linear-gradient(135deg, #10b981 0%, #059669 100%); font-size: 0.78rem;" title="Setujui Mutasi" onclick="updateReplenishStatus(${r.id}, 'APPROVED')"><i class="fa-solid fa-check"></i> Setujui</button>
+                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); font-size: 0.78rem;" title="Pick Barang Gudang Besar" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Pick</button>
                         <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; color: var(--danger); font-size: 0.78rem;" title="Tolak Mutasi" onclick="updateReplenishStatus(${r.id}, 'REJECTED')"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                 `;
             } else if (isApproved) {
                 actionsHtml = `
                     <div style="display: flex; gap: 0.35rem; justify-content: center;">
-                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Selesaikan Mutasi Fisik" onclick="updateReplenishStatus(${r.id}, 'COMPLETED')"><i class="fa-solid fa-box-check"></i> Selesaikan</button>
+                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Selesaikan Mutasi Fisik" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Selesaikan</button>
                     </div>
                 `;
             } else {
-                actionsHtml = `<small style="color: var(--text-muted); font-weight: 600;"><i class="fa-solid fa-lock"></i> Selesai</small>`;
+                actionsHtml = `<small style="color: var(--text-muted); font-weight: 600;"><i class="fa-solid fa-check-double text-green"></i> Selesai</small>`;
             }
+
+            const rackBesarHtml = r.rack_gudang_besar 
+                ? `<span class="loc-bin-tag" style="background: rgba(234, 88, 12, 0.1); color: #c2410c; border: 1px solid rgba(234, 88, 12, 0.25);"><i class="fa-solid fa-warehouse"></i> ${r.rack_gudang_besar}</span>` 
+                : '<span style="color: var(--text-muted); font-style: italic;">Belum di-pick</span>';
+
+            const batchHtml = r.batch_number 
+                ? `<span class="loc-bin-tag" style="background: rgba(79, 70, 229, 0.08); color: #4338ca; border: 1px solid rgba(79, 70, 229, 0.2);"><i class="fa-solid fa-barcode"></i> ${r.batch_number}</span>` 
+                : '<span style="color: var(--text-muted); font-style: italic;">-</span>';
 
             return `
                 <tr>
@@ -1042,10 +1353,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(r.created_at || '').substring(0, 16)}</small></td>
                     <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
                     <td><strong style="color: #0f172a;">${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
-                    <td class="td-right" style="font-family: var(--font-mono); font-weight: 600;">${r.qty_gudang_kecil} Pcs</td>
-                    <td class="td-right" style="color: var(--success); font-weight: 700; font-family: var(--font-mono);">${r.qty_gudang_besar} Pcs</td>
                     <td class="td-right"><strong style="font-size: 1.05rem; color: var(--primary); font-family: var(--font-mono);">${r.qty_request} Pcs</strong></td>
                     <td><span style="font-weight: 600;">${r.requested_by}</span></td>
+                    <td>${rackBesarHtml}</td>
+                    <td>${batchHtml}</td>
                     <td><span class="badge-status ${statusClass}">${r.status}</span></td>
                     <td class="td-center">${actionsHtml}</td>
                 </tr>
@@ -1314,9 +1625,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         usersTableBody.innerHTML = items.map(u => {
-            const roleBadge = u.role === 'admin' 
-                ? '<span class="badge-status approved"><i class="fa-solid fa-shield"></i> Administrator</span>'
-                : '<span class="badge-status completed"><i class="fa-solid fa-mobile-screen"></i> Operator PDA</span>';
+            let roleBadge = '';
+            if (u.role === 'admin') {
+                roleBadge = '<span class="badge-status approved"><i class="fa-solid fa-shield"></i> Administrator</span>';
+            } else if (u.role === 'gudang_besar') {
+                roleBadge = '<span class="badge-status ready" style="background: rgba(234, 88, 12, 0.12); color: #c2410c; border: 1px solid rgba(234, 88, 12, 0.25);"><i class="fa-solid fa-warehouse"></i> Gudang Besar</span>';
+            } else if (u.role === 'gudang_kecil') {
+                roleBadge = '<span class="badge-status warning" style="background: rgba(79, 70, 229, 0.1); color: #4338ca; border: 1px solid rgba(79, 70, 229, 0.25);"><i class="fa-solid fa-box-open"></i> Gudang Kecil</span>';
+            } else {
+                roleBadge = '<span class="badge-status completed"><i class="fa-solid fa-mobile-screen"></i> Operator PDA</span>';
+            }
 
             return `
                 <tr>

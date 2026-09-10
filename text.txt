@@ -1,0 +1,7 @@
+User gudang kecil : request replenish
+User Gudang besar : Akan menerima Task pick from Operator
+    Input Lokasi rack Gudang besar
+    input Batch Number
+
+
+

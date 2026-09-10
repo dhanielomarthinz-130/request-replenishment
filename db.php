@@ -129,6 +129,11 @@ class Database {
                 `status` ENUM('PENDING', 'APPROVED', 'REJECTED', 'COMPLETED') NOT NULL DEFAULT 'PENDING',
                 `admin_notes` TEXT DEFAULT NULL,
                 `processed_by` VARCHAR(100) DEFAULT NULL,
+                `rack_gudang_besar` VARCHAR(100) DEFAULT NULL,
+                `batch_number` VARCHAR(100) DEFAULT NULL,
+                `picked_qty` INT DEFAULT NULL,
+                `picked_by` VARCHAR(100) DEFAULT NULL,
+                `picked_at` DATETIME DEFAULT NULL,
                 `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -195,6 +200,11 @@ class Database {
                 status TEXT NOT NULL DEFAULT 'PENDING',
                 admin_notes TEXT,
                 processed_by TEXT,
+                rack_gudang_besar TEXT,
+                batch_number TEXT,
+                picked_qty INTEGER,
+                picked_by TEXT,
+                picked_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );");
@@ -213,16 +223,10 @@ class Database {
         // rows. The natural key is (bin_code, sku) — rebuild older databases.
         // ---------------------------------------------------------------
         self::migrateSkuRackUniqueKey();
+        self::migrateReplenishRequestColumns();
 
-        // Seed default users if empty
-        $stmt = $pdo->query("SELECT COUNT(*) as cnt FROM users");
-        $userCount = (int)($stmt->fetch()['cnt'] ?? 0);
-        if ($userCount === 0) {
-            $insertUser = $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)");
-            $insertUser->execute(['admin', password_hash('admin123', PASSWORD_DEFAULT), 'Administrator Inventory', 'admin']);
-            $insertUser->execute(['operator', password_hash('operator123', PASSWORD_DEFAULT), 'Operator Gudang 1', 'operator']);
-            $insertUser->execute(['operator2', password_hash('operator123', PASSWORD_DEFAULT), 'Operator Gudang 2', 'operator']);
-        }
+        // Seed default users if empty or missing new roles
+        self::seedDefaultUsers();
 
         // Sync data from ocs_inventory.sqlite if running on MySQL and SQLite has newer/initial data
         if (self::$driverType === 'mysql') {
@@ -433,4 +437,111 @@ class Database {
             error_log('sku_rack_locations unique-key migration failed: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Pastikan kolom rack_gudang_besar, batch_number, picked_qty, picked_by, picked_at
+     * sudah tersedia di tabel replenish_requests (aman untuk MySQL dan SQLite).
+     */
+    private static function migrateReplenishRequestColumns(): void
+    {
+        $pdo = self::$pdo;
+        try {
+            $existingColumns = [];
+            if (self::$driverType === 'mysql') {
+                $stmt = $pdo->query("SHOW COLUMNS FROM `replenish_requests`");
+                while ($col = $stmt->fetch()) {
+                    $existingColumns[strtolower($col['Field'])] = true;
+                }
+            } else {
+                $stmt = $pdo->query("PRAGMA table_info(replenish_requests)");
+                while ($col = $stmt->fetch()) {
+                    $existingColumns[strtolower($col['name'])] = true;
+                }
+            }
+
+            $neededCols = [
+                'rack_gudang_besar' => self::$driverType === 'mysql' ? 'VARCHAR(100) DEFAULT NULL' : 'TEXT',
+                'batch_number'      => self::$driverType === 'mysql' ? 'VARCHAR(100) DEFAULT NULL' : 'TEXT',
+                'picked_qty'        => self::$driverType === 'mysql' ? 'INT DEFAULT NULL' : 'INTEGER',
+                'picked_by'         => self::$driverType === 'mysql' ? 'VARCHAR(100) DEFAULT NULL' : 'TEXT',
+                'picked_at'         => self::$driverType === 'mysql' ? 'DATETIME DEFAULT NULL' : 'DATETIME',
+            ];
+
+            foreach ($neededCols as $colName => $colDef) {
+                if (!isset($existingColumns[$colName])) {
+                    $pdo->exec("ALTER TABLE " . (self::$driverType === 'mysql' ? "`replenish_requests`" : "replenish_requests") . " ADD COLUMN {$colName} {$colDef}");
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('migrateReplenishRequestColumns error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Seed akun bawaan untuk Administrator, Operator Gudang Kecil, dan Operator Gudang Besar
+     */
+    private static function seedDefaultUsers(): void
+    {
+        $pdo = self::$pdo;
+        try {
+            $defaultUsers = [
+                [
+                    'username'  => 'admin',
+                    'full_name' => 'Administrator Inventory',
+                    'role'      => 'admin',
+                    'password'  => 'admin123'
+                ],
+                [
+                    'username'  => 'gudang_kecil',
+                    'full_name' => 'Operator Gudang Kecil',
+                    'role'      => 'gudang_kecil',
+                    'password'  => 'operator123'
+                ],
+                [
+                    'username'  => 'gudang_besar',
+                    'full_name' => 'Operator Gudang Besar',
+                    'role'      => 'gudang_besar',
+                    'password'  => 'operator123'
+                ],
+                [
+                    'username'  => 'operator',
+                    'full_name' => 'Operator Gudang 1',
+                    'role'      => 'gudang_kecil',
+                    'password'  => 'operator123'
+                ],
+                [
+                    'username'  => 'operator2',
+                    'full_name' => 'Operator Gudang 2',
+                    'role'      => 'gudang_besar',
+                    'password'  => 'operator123'
+                ],
+            ];
+
+            $checkStmt = $pdo->prepare("SELECT id, role FROM users WHERE username = ?");
+            $insertStmt = $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)");
+            $updateRoleStmt = $pdo->prepare("UPDATE users SET full_name = ?, role = ? WHERE username = ?");
+
+            foreach ($defaultUsers as $u) {
+                $checkStmt->execute([$u['username']]);
+                $existing = $checkStmt->fetch();
+                if (!$existing) {
+                    $insertStmt->execute([
+                        $u['username'],
+                        password_hash($u['password'], PASSWORD_DEFAULT),
+                        $u['full_name'],
+                        $u['role']
+                    ]);
+                } else if ($u['username'] === 'operator' && $existing['role'] === 'operator') {
+                    // Update legacy role to gudang_kecil
+                    $updateRoleStmt->execute([$u['full_name'], 'gudang_kecil', $u['username']]);
+                } else if ($u['username'] === 'operator2' && $existing['role'] === 'operator') {
+                    // Update legacy operator2 to gudang_besar
+                    $updateRoleStmt->execute([$u['full_name'], 'gudang_besar', $u['username']]);
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('seedDefaultUsers error: ' . $e->getMessage());
+        }
+    }
 }
+

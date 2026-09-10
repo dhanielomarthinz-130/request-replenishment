@@ -3,35 +3,29 @@
  * REST API Backend for OCS Stock Sync & Bin Code Replenishment System
  */
 
-// A browser-lifetime cookie made every page refresh look like a fresh visit on
-// hosts that recycle sessions aggressively, so the login form kept reappearing.
-// Pin an explicit 12 hour cookie plus a matching GC lifetime instead.
+// Robust session handling with 12-hour persistence
 $sessionLifetime = 12 * 60 * 60;
 ini_set('session.gc_maxlifetime', (string)$sessionLifetime);
-ini_set('session.use_strict_mode', '1');
 session_set_cookie_params([
     'lifetime' => $sessionLifetime,
     'path'     => '/',
     'httponly' => true,
     'samesite' => 'Lax',
 ]);
-session_start();
-
-// Slide the expiry forward on every authenticated call so an active admin is
-// never logged out mid-shift.
-if (!empty($_SESSION['user_id'])) {
-    setcookie(session_name(), session_id(), [
-        'expires'  => time() + $sessionLifetime,
-        'path'     => '/',
-        'httponly' => true,
-        'samesite' => 'Lax',
-    ]);
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin) {
+    header("Access-Control-Allow-Origin: $origin");
+    header("Access-Control-Allow-Credentials: true");
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session-Token');
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     exit(0);
@@ -39,6 +33,28 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 
 require_once __DIR__ . '/db.php';
 $pdo = Database::getConnection();
+
+// Helper to generate a tamper-evident session token
+function generateSessionToken(array $user): string {
+    $payload = [
+        'uid' => $user['id'],
+        'u'   => $user['username'],
+        'exp' => time() + (12 * 60 * 60)
+    ];
+    $payload['sig'] = hash_hmac('sha256', $payload['uid'] . '|' . $payload['u'] . '|' . $payload['exp'], 'ocs_auth_secret_2026');
+    return base64_encode(json_encode($payload));
+}
+
+// Helper to verify and decode session token
+function verifySessionToken(string $token): ?array {
+    $raw = base64_decode($token);
+    if (!$raw) return null;
+    $data = json_decode($raw, true);
+    if (!$data || !isset($data['uid'], $data['u'], $data['exp'], $data['sig'])) return null;
+    if ($data['exp'] < time()) return null;
+    $expected = hash_hmac('sha256', $data['uid'] . '|' . $data['u'] . '|' . $data['exp'], 'ocs_auth_secret_2026');
+    return hash_equals($expected, $data['sig']) ? $data : null;
+}
 
 // Helper to send json response
 function jsonResp(array $data, int $code = 200): void {
@@ -57,6 +73,16 @@ function getJsonInput(): array {
 
 $input = array_merge($_GET, $_POST, getJsonInput());
 $action = $input['action'] ?? $_GET['action'] ?? $_POST['action'] ?? '';
+
+// Slide session cookie expiry forward if already active
+if (!empty($_SESSION['user_id'])) {
+    setcookie(session_name(), session_id(), [
+        'expires'  => time() + $sessionLifetime,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
 
 // ==============================================================================
 // 1. AUTHENTICATION & SESSION
@@ -80,9 +106,19 @@ if ($action === 'login') {
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['role'] = $user['role'];
 
+        setcookie(session_name(), session_id(), [
+            'expires'  => time() + $sessionLifetime,
+            'path'     => '/',
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+
+        $sessionToken = generateSessionToken($user);
+
         jsonResp([
             'status' => 'success',
             'message' => 'Login berhasil.',
+            'session_token' => $sessionToken,
             'user' => [
                 'id' => $user['id'],
                 'username' => $user['username'],
@@ -96,16 +132,37 @@ if ($action === 'login') {
 }
 
 if ($action === 'check_session') {
+    // If PHP session is lost (e.g. server worker recycle), restore from valid session_token
+    if (empty($_SESSION['username'])) {
+        $token = trim($input['session_token'] ?? $_SERVER['HTTP_X_SESSION_TOKEN'] ?? '');
+        if ($token) {
+            $verified = verifySessionToken($token);
+            if ($verified) {
+                $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+                $stmt->execute([$verified['uid']]);
+                $user = $stmt->fetch();
+                if ($user) {
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['full_name'] = $user['full_name'];
+                    $_SESSION['role'] = $user['role'];
+                }
+            }
+        }
+    }
+
     if (!empty($_SESSION['username'])) {
+        $userObj = [
+            'id' => $_SESSION['user_id'],
+            'username' => $_SESSION['username'],
+            'full_name' => $_SESSION['full_name'],
+            'role' => $_SESSION['role']
+        ];
         jsonResp([
             'status' => 'success',
             'logged_in' => true,
-            'user' => [
-                'id' => $_SESSION['user_id'],
-                'username' => $_SESSION['username'],
-                'full_name' => $_SESSION['full_name'],
-                'role' => $_SESSION['role']
-            ]
+            'session_token' => generateSessionToken($userObj),
+            'user' => $userObj
         ]);
     } else {
         jsonResp(['status' => 'error', 'logged_in' => false, 'message' => 'Belum login.'], 200);
@@ -113,7 +170,15 @@ if ($action === 'check_session') {
 }
 
 if ($action === 'logout') {
-    session_destroy();
+    $_SESSION = [];
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
+    @session_destroy();
     jsonResp(['status' => 'success', 'message' => 'Berhasil logout.']);
 }
 
@@ -249,7 +314,7 @@ if ($action === 'submit_replenish') {
 
     jsonResp([
         'status' => 'success',
-        'message' => "Request Replenish #{$requestNo} berhasil diajukan dan menunggu persetujuan Admin.",
+        'message' => "Request Replenish #{$requestNo} berhasil diajukan dan diteruskan ke Operator Gudang Besar.",
         'request_no' => $requestNo
     ]);
 }
@@ -283,7 +348,7 @@ if ($action === 'update_replenish_status') {
     $id = (int)($input['id'] ?? 0);
     $newStatus = strtoupper(trim($input['status'] ?? ''));
     $adminNotes = trim($input['admin_notes'] ?? '');
-    $processedBy = trim($_SESSION['username'] ?? 'Admin');
+    $processedBy = trim($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Admin');
 
     if (!$id || !in_array($newStatus, ['PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'])) {
         jsonResp(['status' => 'error', 'message' => 'Data status tidak valid.'], 400);
@@ -315,6 +380,94 @@ if ($action === 'update_replenish_status') {
     jsonResp([
         'status' => 'success',
         'message' => "Permintaan #{$req['request_no']} berhasil diubah statusnya menjadi {$newStatus}."
+    ]);
+}
+
+// ==============================================================================
+// 3B. TASK PICK FOR OPERATOR GUDANG BESAR
+// ==============================================================================
+
+if ($action === 'complete_pick_task') {
+    $id = (int)($input['id'] ?? 0);
+    $rackGudangBesar = trim($input['rack_gudang_besar'] ?? '');
+    $batchNumber = trim($input['batch_number'] ?? '');
+    $pickedQty = (int)($input['picked_qty'] ?? 0);
+    $notes = trim($input['notes'] ?? '');
+    $pickedBy = trim($_SESSION['full_name'] ?? $_SESSION['username'] ?? ($input['picked_by'] ?? 'Operator Gudang Besar'));
+
+    if (!$id) {
+        jsonResp(['status' => 'error', 'message' => 'ID Task Replenish tidak valid.'], 400);
+    }
+    if (empty($rackGudangBesar)) {
+        jsonResp(['status' => 'error', 'message' => 'Lokasi Rack Gudang Besar wajib diisi.'], 400);
+    }
+    if (empty($batchNumber)) {
+        jsonResp(['status' => 'error', 'message' => 'Batch Number barang wajib diisi.'], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT * FROM replenish_requests WHERE id = ?");
+    $stmt->execute([$id]);
+    $req = $stmt->fetch();
+
+    if (!$req) {
+        jsonResp(['status' => 'error', 'message' => 'Permintaan task tidak ditemukan.'], 404);
+    }
+    if ($req['status'] === 'COMPLETED') {
+        jsonResp(['status' => 'error', 'message' => "Task #{$req['request_no']} sudah selesai di-pick sebelumnya."], 400);
+    }
+
+    if ($pickedQty <= 0) {
+        $pickedQty = (int)$req['qty_request'];
+    }
+
+    // Cek stok gudang besar saat ini
+    $sku = $req['sku'];
+    $stmtStock = $pdo->prepare("SELECT qty_gudang_besar, qty_gudang_kecil FROM stock_master WHERE UPPER(sku) = UPPER(?)");
+    $stmtStock->execute([$sku]);
+    $currentStock = $stmtStock->fetch();
+
+    $qtyBesar = $currentStock ? (int)$currentStock['qty_gudang_besar'] : 0;
+    if ($qtyBesar < $pickedQty) {
+        jsonResp(['status' => 'error', 'message' => "Stok Gudang Besar tidak cukup ({$qtyBesar} Pcs tersedia, ingin pick {$pickedQty} Pcs)."], 400);
+    }
+
+    // Mutasi stok lokal: kurangi Gudang Besar, tambahkan Gudang Kecil
+    $pdo->prepare("UPDATE stock_master SET 
+        qty_gudang_besar = CASE WHEN qty_gudang_besar >= ? THEN qty_gudang_besar - ? ELSE 0 END,
+        qty_gudang_kecil = qty_gudang_kecil + ?,
+        last_synced_at = CURRENT_TIMESTAMP
+        WHERE UPPER(sku) = UPPER(?)")->execute([$pickedQty, $pickedQty, $pickedQty, $sku]);
+
+    // Update data task replenish
+    $updateStmt = $pdo->prepare("UPDATE replenish_requests SET 
+        status = 'COMPLETED',
+        rack_gudang_besar = ?,
+        batch_number = ?,
+        picked_qty = ?,
+        picked_by = ?,
+        picked_at = CURRENT_TIMESTAMP,
+        admin_notes = CASE WHEN ? != '' THEN ? ELSE admin_notes END,
+        processed_by = ?,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?");
+    $updateStmt->execute([
+        $rackGudangBesar,
+        $batchNumber,
+        $pickedQty,
+        $pickedBy,
+        $notes,
+        $notes,
+        $pickedBy,
+        $id
+    ]);
+
+    jsonResp([
+        'status' => 'success',
+        'message' => "Task Pick #{$req['request_no']} BERHASIL diselesaikan! Barang telah diambil dari Rak {$rackGudangBesar} (Batch: {$batchNumber}) dan ditransfer ke Gudang Kecil.",
+        'request_no' => $req['request_no'],
+        'rack_gudang_besar' => $rackGudangBesar,
+        'batch_number' => $batchNumber,
+        'picked_qty' => $pickedQty
     ]);
 }
 
