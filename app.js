@@ -228,15 +228,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const opTag = document.getElementById('opProfileRoleTag');
                 if (opTag) {
-                    opTag.textContent = effectiveWh === 'gudang_besar' ? 'Operator Gudang Besar (Task Pick)' : 'Operator Gudang Kecil (Request Replenish)';
+                    opTag.textContent = effectiveWh === 'gudang_besar' ? 'Operator Gudang Besar (Replenish)' : 'Operator Gudang Kecil (Req Replenish)';
                 }
 
                 const profWhName = document.getElementById('profileWhName');
                 const profWhDesc = document.getElementById('profileWhDesc');
                 const profWhIcon = document.getElementById('profileWhIcon');
                 if (profWhName) profWhName.textContent = effectiveWh === 'gudang_besar' ? 'Gudang Besar' : 'Gudang Kecil';
-                if (profWhDesc) profWhDesc.textContent = effectiveWh === 'gudang_besar' ? 'Area Main Storage • Menerima Task Pick' : 'Area Picking Rack • Request Replenish';
+                if (profWhDesc) profWhDesc.textContent = effectiveWh === 'gudang_besar' ? 'Area Main Storage • Mengerjakan Replenish' : 'Area Picking Rack • Req Replenish';
                 if (profWhIcon) profWhIcon.innerHTML = `<i class="fa-solid fa-${effectiveWh === 'gudang_besar' ? 'warehouse' : 'box-open'}"></i>`;
+
+                applyWarehouseModeUI(effectiveWh);
             }
             setTimeout(() => inputBinCode && inputBinCode.focus(), 250);
             loadOperatorHistory();
@@ -257,6 +259,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function applyWarehouseModeUI(effectiveWh) {
+        const isGB = effectiveWh === 'gudang_besar';
+        const btnNavScan = document.getElementById('btnNavScan');
+        const tabScan = document.getElementById('opTabScan');
+        const btnNavPick = document.getElementById('btnNavPickTask');
+
+        if (btnNavScan) {
+            btnNavScan.style.display = isGB ? 'none' : 'flex';
+        }
+
+        // When switching to Gudang Besar mode, request page is not displayed: redirect to Replenish task tab
+        if (isGB) {
+            if (tabScan && tabScan.classList.contains('active')) {
+                switchMobileTab('opTabPickTask', btnNavPick);
+            }
+        }
+    }
+
     // =========================================================================
     // 2. AUTHENTICATION & SESSION HANDLING
     // =========================================================================
@@ -273,23 +293,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (document.getElementById(tab)) switchAdminTab(tab);
         } else if (effectiveWh === 'gudang_besar') {
             switchView('operator');
+            applyWarehouseModeUI('gudang_besar');
             startPickTaskAutoPolling();
             const btnPick = document.getElementById('btnNavPickTask');
-            if (preferredTab && document.getElementById(preferredTab)) {
-                switchMobileTab(preferredTab);
-            } else {
-                switchMobileTab('opTabPickTask', btnPick);
-            }
+            const targetTab = (preferredTab && preferredTab !== 'opTabScan' && document.getElementById(preferredTab))
+                ? preferredTab
+                : 'opTabPickTask';
+            switchMobileTab(targetTab, btnPick);
         } else {
             // Role gudang_kecil
             switchView('operator');
+            applyWarehouseModeUI('gudang_kecil');
             stopPickTaskAutoPolling();
             const btnScan = document.getElementById('btnNavScan');
-            if (preferredTab && document.getElementById(preferredTab)) {
-                switchMobileTab(preferredTab);
-            } else {
-                switchMobileTab('opTabScan', btnScan);
-            }
+            const targetTab = (preferredTab && document.getElementById(preferredTab)) ? preferredTab : 'opTabScan';
+            switchMobileTab(targetTab, btnScan);
         }
     }
 
@@ -405,6 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (data.status === 'success' && data.user) {
                 AppState.user = data.user;
+                applyWarehouseModeUI(targetWarehouse);
                 const newTab = targetWarehouse === 'gudang_besar' ? 'opTabPickTask' : 'opTabScan';
                 writeCachedSession(data.user, newTab, data.session_token);
                 showToast(data.message, 'success');
@@ -436,6 +455,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
 
     window.switchMobileTab = function(tabId, btn) {
+        const effectiveWh = AppState.user ? ((AppState.user.work_location || AppState.user.role) === 'gudang_besar' ? 'gudang_besar' : 'gudang_kecil') : 'gudang_kecil';
+        if (effectiveWh === 'gudang_besar' && tabId === 'opTabScan') {
+            tabId = 'opTabPickTask';
+            btn = document.getElementById('btnNavPickTask');
+        }
+
         document.querySelectorAll('.mobile-bottom-navbar .bottom-tab-item').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.mobile-main-body .mobile-tab-view').forEach(p => p.classList.remove('active'));
 
@@ -860,7 +885,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const feed = document.getElementById('pickTasksFeed');
         if (!feed) return;
         if (!isBackground && AppState.pickTasks.length === 0) {
-            feed.innerHTML = `<div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat task pick...</div>`;
+            feed.innerHTML = `<div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat antrean replenish...</div>`;
         }
 
         try {
@@ -892,12 +917,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         const titleEl = document.getElementById('alertNewTaskTitle');
                         const subEl = document.getElementById('alertNewTaskSubtitle');
                         const firstFresh = freshTasks[0];
-                        if (titleEl) titleEl.textContent = `${freshTasks.length} Task Pick Baru dari Gudang Kecil!`;
+                        if (titleEl) titleEl.textContent = `${freshTasks.length} Permintaan Replenish Baru dari Gudang Kecil!`;
                         if (subEl) subEl.textContent = `#${firstFresh.request_no} • ${firstFresh.product_name} (${firstFresh.qty_request} Pcs)`;
                         banner.style.display = 'flex';
                     }
 
-                    showToast(`🔔 [Gudang Besar] ${freshTasks.length} Task Pick Baru Masuk dari Gudang Kecil!`, 'info');
+                    showToast(`🔔 [Gudang Besar] ${freshTasks.length} Permintaan Replenish Baru Masuk dari Gudang Kecil!`, 'info');
 
                     // 3. Pulse bottom nav bubble
                     const bubble = document.getElementById('bubblePickTask');
@@ -1270,7 +1295,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadAdminReplenish();
                 }
             } else {
-                showToast(json.message || 'Gagal menyelesaikan task pick.', 'error');
+                showToast(json.message || 'Gagal menyelesaikan replenish.', 'error');
             }
         } catch (err) {
             showToast('Gagal menghubungi server: ' + err.message, 'error');

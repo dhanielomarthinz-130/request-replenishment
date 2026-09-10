@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=5.3.1">
+  <link rel="stylesheet" href="style.css?v=5.3.3">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -344,7 +344,7 @@
                   <div class="card-icon besar"><i class="fa-solid fa-warehouse"></i></div>
                   <div class="card-text">
                     <strong>Gudang Besar</strong>
-                    <span>Task Pick / Main Storage</span>
+                    <span>Replenish / Main Storage</span>
                   </div>
                 </label>
               </div>
@@ -576,7 +576,7 @@
                   <i class="fa-solid fa-cart-flatbed"></i>
                 </div>
                 <div>
-                  <h3 class="pick-heading-title">Task Pick Gudang Besar</h3>
+                  <h3 class="pick-heading-title">Replenish Gudang Besar</h3>
                   <p class="pick-heading-subtitle">Daftar permintaan replenish dari Operator Gudang Kecil</p>
                 </div>
               </div>
@@ -597,7 +597,7 @@
               <div class="banner-left">
                 <i class="fa-solid fa-bell bell-ringing"></i>
                 <div class="banner-texts">
-                  <strong id="alertNewTaskTitle">1 Task Pick Baru Masuk!</strong>
+                  <strong id="alertNewTaskTitle">1 Permintaan Replenish Baru Masuk!</strong>
                   <span id="alertNewTaskSubtitle">Ada permohonan replenish baru dari Gudang Kecil</span>
                 </div>
               </div>
@@ -634,7 +634,7 @@
 
             <!-- Task Cards List Feed -->
             <div class="pick-tasks-feed" id="pickTasksFeed">
-              <div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat antrean task pick...</div>
+              <div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat antrean replenish...</div>
             </div>
 
           </div>
@@ -698,15 +698,15 @@
 
       </main>
 
-      <!-- Native Mobile Bottom Tab Bar (4 Main Navigation Items) -->
+      <!-- Native Mobile Bottom Tab Bar (Adaptive for Gudang Kecil / Gudang Besar) -->
       <nav class="mobile-bottom-navbar">
         <button class="bottom-tab-item active" id="btnNavScan" onclick="switchMobileTab('opTabScan', this)">
           <i class="fa-solid fa-box-open"></i>
-          <span>Replenish</span>
+          <span>Req Replenish</span>
         </button>
         <button class="bottom-tab-item" id="btnNavPickTask" onclick="switchMobileTab('opTabPickTask', this)">
           <i class="fa-solid fa-cart-flatbed"></i>
-          <span>Task Pick</span>
+          <span>Replenish</span>
           <span class="nav-bubble-count" id="bubblePickTask" style="display: none;">0</span>
         </button>
         <button class="bottom-tab-item" id="btnNavStockSearch" onclick="switchMobileTab('opTabStockSearch', this)">
@@ -1624,8 +1624,8 @@
           <select id="userFormRole" required>
             <option value="superadmin">Super Admin (Akses Penuh)</option>
             <option value="admin">Administrator Inventory (Panel Admin ERP)</option>
-            <option value="gudang_kecil">Operator Gudang Kecil (Request Replenish)</option>
-            <option value="gudang_besar">Operator Gudang Besar (Task Pick Barang)</option>
+            <option value="gudang_kecil">Operator Gudang Kecil (Req Replenish)</option>
+            <option value="gudang_besar">Operator Gudang Besar (Replenish Barang)</option>
             <option value="operator">Operator Umum (Mobile PDA)</option>
           </select>
         </div>
@@ -1827,7 +1827,7 @@
               <strong>Gudang Besar</strong>
               <span class="sw-badge-active" id="swBadgeCurrentBesar" style="display: none;">Aktif</span>
             </div>
-            <p>Area Main Storage • Menerima Task Pick dari Gudang Kecil secara otomatis</p>
+            <p>Area Main Storage • Menerima Permintaan Replenish dari Gudang Kecil secara otomatis</p>
           </div>
           <i class="fa-solid fa-chevron-right sw-arrow"></i>
         </button>
@@ -1843,7 +1843,7 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=5.3.1"></script>
+  <script src="app.js?v=5.3.3"></script>
 </body>
 
 </html>
