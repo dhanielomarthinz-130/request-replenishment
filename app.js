@@ -14,6 +14,10 @@ document.addEventListener('DOMContentLoaded', () => {
         stocks: [],
         minusStocks: [],
         minusThreshold: 0,
+        minusAssignFilter: 'ALL',
+        selectedMinusSkus: new Set(),
+        selectedMinusItems: new Map(),
+        selectedReplenishIds: new Set(),
         replenishRequests: [],
         isSyncing: false
     };
@@ -1569,7 +1573,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.loadAdminReplenish = async function() {
-        adminReplenishTableBody.innerHTML = `<tr><td colspan="12" class="td-center py-4">Memuat data permintaan...</td></tr>`;
+        adminReplenishTableBody.innerHTML = `<tr><td colspan="13" class="td-center py-4">Memuat data permintaan...</td></tr>`;
 
         try {
             const status = AppState.activeReplenishFilter;
@@ -1578,22 +1582,26 @@ document.addEventListener('DOMContentLoaded', () => {
             if (json.status === 'success') {
                 AppState.replenishRequests = json.data;
                 renderAdminReplenishTable(json.data);
+                updateReplenishSelectedCount();
             }
         } catch (err) {
-            adminReplenishTableBody.innerHTML = `<tr><td colspan="12" class="td-center py-4 text-danger">Gagal memuat: ${err.message}</td></tr>`;
+            adminReplenishTableBody.innerHTML = `<tr><td colspan="13" class="td-center py-4 text-danger">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
     function renderAdminReplenishTable(items) {
         if (!items || items.length === 0) {
-            adminReplenishTableBody.innerHTML = `<tr><td colspan="12" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Tidak ada data permintaan replenish yang ditemukan.</td></tr>`;
+            adminReplenishTableBody.innerHTML = `<tr><td colspan="13" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Tidak ada data permintaan replenish yang ditemukan.</td></tr>`;
             return;
         }
 
         adminReplenishTableBody.innerHTML = items.map(r => {
+            const isPending = r.status === 'PENDING';
+            const isApproved = r.status === 'APPROVED';
             const statusClass = (r.status || 'PENDING').toLowerCase();
             const isCancelled = r.status === 'CANCELLED';
             const isCompleted = r.status === 'COMPLETED';
+            const isChecked = AppState.selectedReplenishIds.has(Number(r.id));
 
             let pickBtnHtml = '';
             if (isPending) {
@@ -1659,7 +1667,13 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
 
             return `
-                <tr>
+                <tr class="${isChecked ? 'row-selected' : ''}">
+                    <td class="td-center">
+                        <input type="checkbox" class="tbl-checkbox check-replenish-item" 
+                               data-id="${r.id}" 
+                               ${isChecked ? 'checked' : ''} 
+                               onchange="toggleSelectReplenishItem(${r.id}, this.checked)">
+                    </td>
                     <td><strong style="font-family: var(--font-mono); font-size: 0.76rem; color: #0f172a;">${r.request_no}</strong></td>
                     <td><small style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.68rem;">${(r.created_at || '').substring(0, 16)}</small></td>
                     <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
@@ -1679,6 +1693,109 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }).join('');
     }
+
+    // Batch Actions for Replenish Requests
+    window.toggleSelectAllReplenish = function(checked) {
+        if (!AppState.replenishRequests || AppState.replenishRequests.length === 0) return;
+        AppState.replenishRequests.forEach(r => {
+            if (checked) {
+                AppState.selectedReplenishIds.add(Number(r.id));
+            } else {
+                AppState.selectedReplenishIds.delete(Number(r.id));
+            }
+        });
+        document.querySelectorAll('.check-replenish-item').forEach(cb => {
+            cb.checked = checked;
+            const tr = cb.closest('tr');
+            if (tr) tr.classList.toggle('row-selected', checked);
+        });
+        updateReplenishSelectedCount();
+    };
+
+    window.toggleSelectReplenishItem = function(id, checked) {
+        id = Number(id);
+        if (checked) {
+            AppState.selectedReplenishIds.add(id);
+        } else {
+            AppState.selectedReplenishIds.delete(id);
+        }
+        const cb = document.querySelector(`.check-replenish-item[data-id="${id}"]`);
+        if (cb) {
+            const tr = cb.closest('tr');
+            if (tr) tr.classList.toggle('row-selected', checked);
+        }
+        updateReplenishSelectedCount();
+    };
+
+    window.updateReplenishSelectedCount = function() {
+        const count = AppState.selectedReplenishIds.size;
+        const bar = document.getElementById('replenishBatchBar');
+        const text = document.getElementById('replenishSelectedCountText');
+        if (text) text.textContent = `${count} Permintaan dipilih`;
+        if (bar) bar.style.display = count > 0 ? 'flex' : 'none';
+        const master = document.getElementById('checkAllReplenish');
+        if (master) {
+            master.checked = count > 0 && AppState.replenishRequests && count === AppState.replenishRequests.length;
+        }
+    };
+
+    window.clearReplenishSelection = function() {
+        AppState.selectedReplenishIds.clear();
+        document.querySelectorAll('.check-replenish-item').forEach(cb => {
+            cb.checked = false;
+            const tr = cb.closest('tr');
+            if (tr) tr.classList.remove('row-selected');
+        });
+        const master = document.getElementById('checkAllReplenish');
+        if (master) master.checked = false;
+        updateReplenishSelectedCount();
+    };
+
+    window.executeBatchReplenishAction = async function(actionType) {
+        if (AppState.selectedReplenishIds.size === 0) {
+            showToast('Pilih minimal 1 permintaan terlebih dahulu.', 'error');
+            return;
+        }
+
+        let label = 'Selesaikan & Potong Stok (OCS & WMS)';
+        if (actionType === 'done_ocs') label = 'Tandai Done OCS';
+        if (actionType === 'done_wms') label = 'Tandai Done WMS';
+
+        const count = AppState.selectedReplenishIds.size;
+        if (!confirm(`Apakah Anda yakin ingin memproses ${count} permintaan terpilih?\nAksi: ${label}`)) {
+            return;
+        }
+
+        try {
+            const payload = {
+                action: 'batch_complete_replenish',
+                request_ids: Array.from(AppState.selectedReplenishIds),
+                batch_action: actionType
+            };
+
+            const res = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+
+            if (json.status === 'success') {
+                showToast(json.message, 'success');
+                clearReplenishSelection();
+                loadAdminReplenish();
+                loadDashboardStats();
+                if (actionType === 'complete_and_cut') {
+                    loadMinusStock();
+                }
+            } else {
+                showToast(json.message || 'Gagal memproses batch permintaan.', 'error');
+            }
+        } catch (err) {
+            showToast('Error server: ' + err.message, 'error');
+        }
+    };
 
     window.toggleCutStock = async function(id, type) {
         try {
@@ -1928,10 +2045,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.loadMinusStock = async function() {
         if (!minusStockTableBody) return;
         const search = searchMinusStock ? searchMinusStock.value.trim() : '';
-        minusStockTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data stok minus...</td></tr>`;
+        minusStockTableBody.innerHTML = `<tr><td colspan="9" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data stok minus...</td></tr>`;
 
         try {
-            const url = `api.php?action=get_negative_stocks&threshold=${AppState.minusThreshold}&search=${encodeURIComponent(search)}`;
+            const assignFilter = AppState.minusAssignFilter || 'ALL';
+            const url = `api.php?action=get_negative_stocks&threshold=${AppState.minusThreshold}&assigned_filter=${encodeURIComponent(assignFilter)}&search=${encodeURIComponent(search)}`;
             const res = await fetch(url, { credentials: 'same-origin' });
             const json = await res.json();
             if (json.status === 'success') {
@@ -1939,17 +2057,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderMinusStockTable(json.data);
                 const elRows = document.getElementById('minusCountRows');
                 if (elRows) elRows.textContent = (json.total_rows || 0).toLocaleString('id-ID');
+                updateMinusSelectedCount();
             } else {
-                minusStockTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--danger);">${json.message || 'Gagal memuat data.'}</td></tr>`;
+                minusStockTableBody.innerHTML = `<tr><td colspan="9" class="td-center py-4" style="color: var(--danger);">${json.message || 'Gagal memuat data.'}</td></tr>`;
             }
         } catch (err) {
-            minusStockTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
+            minusStockTableBody.innerHTML = `<tr><td colspan="9" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
     function renderMinusStockTable(items) {
         if (!items || items.length === 0) {
-            minusStockTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 1.4rem; display: block; margin-bottom: 0.5rem;"></i>Tidak ada stok Gudang Kecil yang minus untuk filter ini.</td></tr>`;
+            minusStockTableBody.innerHTML = `<tr><td colspan="9" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 1.4rem; display: block; margin-bottom: 0.5rem;"></i>Tidak ada stok Gudang Kecil yang sesuai filter ini.</td></tr>`;
             return;
         }
 
@@ -1961,6 +2080,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</strong><br><small style="color: var(--text-muted); font-size: 0.68rem;">${s.rack_name || ''}</small>`
                 : `<span class="bin-unmapped-tag" style="font-size: 0.68rem;"><i class="fa-solid fa-circle-question"></i> Belum Dipetakan</span>`;
 
+            const isChecked = AppState.selectedMinusSkus.has(s.sku);
+
+            const statusAssignHtml = s.active_assigned_to 
+                ? `<span class="assigned-user-pill" title="Ditugaskan ke ${s.active_assigned_to} (${s.active_request_no || ''})"><i class="fa-solid fa-user-check"></i> ${s.active_assigned_to}</span>` 
+                : `<span class="unassigned-pill" title="Belum ada penugasan replenish aktif"><i class="fa-solid fa-clock"></i> Belum</span>`;
+
             let actionBtn = '';
             if (besar > 0) {
                 actionBtn = `<button class="btn-primary-clean btn-sm" onclick='openAssignGudangBesarModal(${JSON.stringify(s).replace(/'/g, "&#39;")})' title="Assign tugas replenish ke Operator Gudang Besar"><i class="fa-solid fa-user-tag"></i> Assign GB</button>`;
@@ -1969,7 +2094,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             return `
-                <tr>
+                <tr class="${isChecked ? 'row-selected' : ''}">
+                    <td class="td-center">
+                        <input type="checkbox" class="tbl-checkbox check-minus-item" 
+                               data-sku="${s.sku}" 
+                               ${isChecked ? 'checked' : ''} 
+                               onchange='toggleSelectMinusItem(${JSON.stringify(s.sku)}, ${JSON.stringify(s).replace(/'/g, "&#39;")}, this.checked)'>
+                    </td>
                     <td class="col-sku-combined">
                         <span class="sku-code-text">${s.sku}</span>
                         <span class="sku-product-name">${s.product_name || '-'}</span>
@@ -1979,11 +2110,85 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="td-right"><strong class="${qtyClass}" style="font-size: 0.82rem;">${kecil.toLocaleString('id-ID')}</strong></td>
                     <td class="td-right" style="font-size: 0.78rem;">${besar.toLocaleString('id-ID')}</td>
                     <td class="td-right" style="font-size: 0.78rem;">${Number(s.qty_on_hand || 0).toLocaleString('id-ID')}</td>
-                    <td><small style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.68rem;">${(s.last_synced_at || '-').substring(0, 16)}</small></td>
+                    <td>${statusAssignHtml}</td>
                     <td class="td-center">${actionBtn}</td>
                 </tr>
             `;
         }).join('');
+    }
+
+    // Batch Multi-Select for Stok Minus
+    window.toggleSelectAllMinusStock = function(checked) {
+        if (!AppState.minusStocks || AppState.minusStocks.length === 0) return;
+        AppState.minusStocks.forEach(s => {
+            if (checked) {
+                AppState.selectedMinusSkus.add(s.sku);
+                AppState.selectedMinusItems.set(s.sku, s);
+            } else {
+                AppState.selectedMinusSkus.delete(s.sku);
+                AppState.selectedMinusItems.delete(s.sku);
+            }
+        });
+        document.querySelectorAll('.check-minus-item').forEach(cb => {
+            cb.checked = checked;
+            const tr = cb.closest('tr');
+            if (tr) tr.classList.toggle('row-selected', checked);
+        });
+        updateMinusSelectedCount();
+    };
+
+    window.toggleSelectMinusItem = function(sku, item, checked) {
+        if (checked) {
+            AppState.selectedMinusSkus.add(sku);
+            AppState.selectedMinusItems.set(sku, item);
+        } else {
+            AppState.selectedMinusSkus.delete(sku);
+            AppState.selectedMinusItems.delete(sku);
+        }
+        const cb = document.querySelector(`.check-minus-item[data-sku="${sku}"]`);
+        if (cb) {
+            const tr = cb.closest('tr');
+            if (tr) tr.classList.toggle('row-selected', checked);
+        }
+        updateMinusSelectedCount();
+    };
+
+    window.updateMinusSelectedCount = function() {
+        const count = AppState.selectedMinusSkus.size;
+        const bar = document.getElementById('minusBatchBar');
+        const text = document.getElementById('minusSelectedCountText');
+        if (text) text.textContent = `${count} SKU dipilih`;
+        if (bar) bar.style.display = count > 0 ? 'flex' : 'none';
+        const master = document.getElementById('checkAllMinusStock');
+        if (master) {
+            master.checked = count > 0 && AppState.minusStocks && count === AppState.minusStocks.length;
+        }
+    };
+
+    window.clearMinusSelection = function() {
+        AppState.selectedMinusSkus.clear();
+        AppState.selectedMinusItems.clear();
+        document.querySelectorAll('.check-minus-item').forEach(cb => {
+            cb.checked = false;
+            const tr = cb.closest('tr');
+            if (tr) tr.classList.remove('row-selected');
+        });
+        const master = document.getElementById('checkAllMinusStock');
+        if (master) master.checked = false;
+        updateMinusSelectedCount();
+    };
+
+    // Filter Assign GB Event Listeners
+    const minusAssignFilters = document.getElementById('minusAssignFilters');
+    if (minusAssignFilters) {
+        minusAssignFilters.querySelectorAll('.pill-filter').forEach(btn => {
+            btn.addEventListener('click', () => {
+                minusAssignFilters.querySelectorAll('.pill-filter').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                AppState.minusAssignFilter = btn.getAttribute('data-assign') || 'ALL';
+                loadMinusStock();
+            });
+        });
     }
 
     if (searchMinusStock) {
@@ -2001,7 +2206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Modal Assign Replenish ke Gudang Besar
+    // Modal Assign Replenish ke Gudang Besar (Single)
     window.openAssignGudangBesarModal = async function(item) {
         if (!item) return;
 
@@ -2039,7 +2244,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         inputQty.value = Math.max(1, suggested);
 
-        document.getElementById('assignInputNotes').value = kecil < 0 ? `Stok minus ${kecil} Pcs di rak Gudang Kecil, mohon segera dipick.` : '';
+        document.getElementById('assignInputNotes').value = kecil < 0 ? `Stok minus ${kecil} Pcs di rak Gudang Kecil, mohon segera direplenish.` : '';
 
         // Load Gudang Besar users
         const selectOp = document.getElementById('assignSelectOperator');
@@ -2071,6 +2276,157 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         openModal('modalAssignGudangBesar');
+    };
+
+    // Modal Batch Assign ke Gudang Besar (Multiple Select)
+    window.openBatchAssignModal = async function() {
+        if (AppState.selectedMinusSkus.size === 0) {
+            showToast('Pilih minimal 1 SKU terlebih dahulu.', 'error');
+            return;
+        }
+
+        const count = AppState.selectedMinusSkus.size;
+        const summaryText = document.getElementById('batchAssignSummaryText');
+        if (summaryText) summaryText.textContent = `${count} SKU Terpilih untuk Penugasan`;
+
+        const listContainer = document.getElementById('batchAssignSelectedList');
+        if (listContainer) {
+            const items = Array.from(AppState.selectedMinusItems.values());
+            listContainer.innerHTML = items.map(it => {
+                const kecil = Number(it.qty_gudang_kecil || 0);
+                const besar = Number(it.qty_gudang_besar || 0);
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.76rem;">
+                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%;">
+                            <strong style="font-family: var(--font-mono); color: #0f172a;">${it.sku}</strong>
+                            <span style="color: #64748b; margin-left: 0.35rem;">${it.product_name || '-'}</span>
+                        </div>
+                        <div style="display: flex; gap: 0.6rem; font-family: var(--font-mono); font-size: 0.74rem;">
+                            <span style="color: #dc2626; font-weight: 700;">Kecil: ${kecil}</span>
+                            <span style="color: #10b981; font-weight: 700;">GB: ${besar}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        const selectOp = document.getElementById('batchAssignSelectOperator');
+        selectOp.innerHTML = '<option value="">-- Memuat daftar operator... --</option>';
+
+        try {
+            const res = await fetch('api.php?action=get_users', { credentials: 'same-origin' });
+            const json = await res.json();
+            if (json.status === 'success' && json.data) {
+                const users = json.data;
+                const gbUsers = users.filter(u => u.role === 'gudang_besar' || u.role === 'operator');
+                const listToUse = gbUsers.length > 0 ? gbUsers : users;
+
+                selectOp.innerHTML = listToUse.map(u => {
+                    const roleLabel = u.role === 'gudang_besar' ? 'Gudang Besar' : (u.role === 'admin' ? 'Admin' : 'Operator');
+                    return `<option value="${u.username}">${u.full_name || u.username} (${roleLabel})</option>`;
+                }).join('');
+            } else {
+                selectOp.innerHTML = `
+                    <option value="gudang_besar">Operator Gudang Besar (gudang_besar)</option>
+                    <option value="operator2">Operator Gudang 2 (operator2)</option>
+                `;
+            }
+        } catch (e) {
+            selectOp.innerHTML = `
+                <option value="gudang_besar">Operator Gudang Besar (gudang_besar)</option>
+                <option value="operator2">Operator Gudang 2 (operator2)</option>
+            `;
+        }
+
+        openModal('modalBatchAssignGB');
+    };
+
+    window.submitBatchAssign = async function(event) {
+        if (event) event.preventDefault();
+        if (AppState.selectedMinusSkus.size === 0) {
+            showToast('Tidak ada SKU yang dipilih.', 'error');
+            return;
+        }
+
+        const operator = document.getElementById('batchAssignSelectOperator').value;
+        if (!operator) {
+            showToast('Pilih operator tujuan terlebih dahulu.', 'error');
+            return;
+        }
+
+        const qtyMode = document.getElementById('batchAssignQtyMode').value || 'auto';
+        const notes = document.getElementById('batchAssignInputNotes').value.trim() || 'Stok minus di rak Gudang Kecil, mohon segera direplenish.';
+        const requestedBy = AppState.user ? (AppState.user.full_name || AppState.user.username) : 'Admin Inventory';
+
+        const btnSubmit = document.getElementById('btnSubmitBatchAssign');
+        if (btnSubmit) btnSubmit.disabled = true;
+
+        try {
+            const items = [];
+            AppState.selectedMinusItems.forEach(item => {
+                const kecil = Number(item.qty_gudang_kecil || 0);
+                const besar = Number(item.qty_gudang_besar || 0);
+                let qtyReq = 10;
+
+                if (qtyMode === 'auto') {
+                    if (kecil < 0) {
+                        qtyReq = Math.abs(kecil) + 5;
+                    } else if (kecil === 0) {
+                        qtyReq = 10;
+                    }
+                    if (besar > 0 && qtyReq > besar) {
+                        qtyReq = besar;
+                    }
+                } else if (qtyMode === 'fixed10') {
+                    qtyReq = besar > 0 ? Math.min(10, besar) : 10;
+                } else if (qtyMode === 'fixed25') {
+                    qtyReq = besar > 0 ? Math.min(25, besar) : 25;
+                } else if (qtyMode === 'max') {
+                    qtyReq = besar > 0 ? besar : 10;
+                }
+
+                items.push({
+                    sku: item.sku,
+                    bin_code: item.bin_code || ('BIN-' + item.sku),
+                    product_name: item.product_name || item.sku || '',
+                    barcode: item.barcode || '',
+                    qty_gudang_kecil: kecil,
+                    qty_gudang_besar: besar,
+                    qty_request: Math.max(1, qtyReq)
+                });
+            });
+
+            const payload = {
+                action: 'batch_assign_replenish_task',
+                assigned_to: operator,
+                requested_by: requestedBy,
+                notes: notes,
+                items: items
+            };
+
+            const res = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+
+            if (json.status === 'success') {
+                showToast(json.message || 'Berhasil menugaskan seluruh SKU terpilih!', 'success');
+                closeModal('modalBatchAssignGB');
+                clearMinusSelection();
+                loadMinusStock();
+                loadAdminReplenish();
+                loadDashboardStats();
+            } else {
+                showToast(json.message || 'Gagal menugaskan task batch.', 'error');
+            }
+        } catch (err) {
+            showToast('Error server: ' + err.message, 'error');
+        } finally {
+            if (btnSubmit) btnSubmit.disabled = false;
+        }
     };
 
     const formAssignGB = document.getElementById('formAssignGudangBesar');

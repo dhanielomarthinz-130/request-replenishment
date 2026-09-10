@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=5.2.5">
+  <link rel="stylesheet" href="style.css?v=5.2.6">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -1114,10 +1114,35 @@
                 </div>
               </div>
 
+              <!-- Batch Action Bar: Completed Potong Stok Terpilih -->
+              <div id="replenishBatchBar" class="batch-selection-bar" style="display: none;">
+                <div class="batch-bar-info">
+                  <i class="fa-solid fa-square-check"></i>
+                  <span id="replenishSelectedCountText">0 Permintaan dipilih</span>
+                </div>
+                <div class="batch-bar-actions">
+                  <button type="button" class="btn-primary-clean btn-sm" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);" onclick="executeBatchReplenishAction('complete_and_cut')">
+                    <i class="fa-solid fa-check-double"></i> Selesaikan &amp; Potong Stok Terpilih
+                  </button>
+                  <button type="button" class="btn-secondary-clean btn-sm" onclick="executeBatchReplenishAction('done_ocs')">
+                    <i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Done OCS Terpilih
+                  </button>
+                  <button type="button" class="btn-secondary-clean btn-sm" onclick="executeBatchReplenishAction('done_wms')">
+                    <i class="fa-solid fa-circle-check" style="color: #6366f1;"></i> Done WMS Terpilih
+                  </button>
+                  <button type="button" class="btn-secondary-clean btn-sm" onclick="clearReplenishSelection()">
+                    <i class="fa-solid fa-xmark"></i> Batal
+                  </button>
+                </div>
+              </div>
+
               <div class="table-clean-wrapper">
                 <table class="table-clean">
                   <thead>
                     <tr>
+                      <th style="width: 38px; text-align: center;">
+                        <input type="checkbox" id="checkAllReplenish" class="tbl-checkbox" onchange="toggleSelectAllReplenish(this.checked)" title="Pilih Semua Permintaan">
+                      </th>
                       <th>No. Request</th>
                       <th>Waktu</th>
                       <th>Rak Gudang Kecil</th>
@@ -1134,7 +1159,7 @@
                   </thead>
                   <tbody id="adminReplenishTableBody">
                     <tr>
-                      <td colspan="12" class="td-center">Memuat data permintaan...</td>
+                      <td colspan="13" class="td-center">Memuat data permintaan...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1233,9 +1258,30 @@
                     <button class="pill-filter" data-threshold="-1">Hanya Minus</button>
                     <button class="pill-filter" data-threshold="5">&le; 5 Pcs</button>
                   </div>
+                  <div class="status-filter-pills" id="minusAssignFilters" title="Filter Penugasan Gudang Besar">
+                    <button class="pill-filter active" data-assign="ALL"><i class="fa-solid fa-layer-group"></i> Semua Assign</button>
+                    <button class="pill-filter" data-assign="UNASSIGNED"><i class="fa-solid fa-clock"></i> Belum di-Assign</button>
+                    <button class="pill-filter" data-assign="ASSIGNED"><i class="fa-solid fa-user-check"></i> Sudah di-Assign GB</button>
+                  </div>
                   <button class="btn-toolbar-btn outline" onclick="loadMinusStock()" title="Muat ulang data">
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Batch Action Bar: Assign Terpilih ke Gudang Besar -->
+              <div id="minusBatchBar" class="batch-selection-bar" style="display: none;">
+                <div class="batch-bar-info">
+                  <i class="fa-solid fa-square-check"></i>
+                  <span id="minusSelectedCountText">0 SKU dipilih</span>
+                </div>
+                <div class="batch-bar-actions">
+                  <button type="button" class="btn-primary-clean btn-sm" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);" onclick="openBatchAssignModal()">
+                    <i class="fa-solid fa-user-tag"></i> Assign Terpilih ke Gudang Besar
+                  </button>
+                  <button type="button" class="btn-secondary-clean btn-sm" onclick="clearMinusSelection()">
+                    <i class="fa-solid fa-xmark"></i> Batal Pilih
                   </button>
                 </div>
               </div>
@@ -1244,19 +1290,22 @@
                 <table class="table-clean">
                   <thead>
                     <tr>
+                      <th style="width: 38px; text-align: center;">
+                        <input type="checkbox" id="checkAllMinusStock" class="tbl-checkbox" onchange="toggleSelectAllMinusStock(this.checked)" title="Pilih Semua Baris">
+                      </th>
                       <th class="col-sku-combined">SKU &amp; Nama Produk</th>
                       <th>Barcode</th>
                       <th>Bin Code / Rak</th>
                       <th class="td-right">Gudang Kecil</th>
                       <th class="td-right">Gudang Besar</th>
                       <th class="td-right">On Hand</th>
-                      <th>Update Terakhir</th>
-                      <th class="td-center">Aksi / Assign</th>
+                      <th>Status Assign</th>
+                      <th class="td-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody id="minusStockTableBody">
                     <tr>
-                      <td colspan="8" class="td-center">Memuat data stok minus...</td>
+                      <td colspan="9" class="td-center">Memuat data stok minus...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1412,13 +1461,72 @@
         <!-- Notes -->
         <div class="field-item">
           <label for="assignInputNotes" style="font-size: 0.76rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem; display: block;">Catatan / Instruksi</label>
-          <input type="text" id="assignInputNotes" style="width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.78rem;" placeholder="Contoh: Stok minus di rak, tolong segera dipick">
+          <input type="text" id="assignInputNotes" style="width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.78rem;" placeholder="Contoh: Stok minus di rak, tolong segera direplenish">
         </div>
 
         <div class="form-modal-footer" style="display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 0.4rem; padding-top: 0.75rem; border-top: 1px solid #f1f5f9;">
           <button type="button" class="btn-secondary-clean btn-sm" onclick="closeModal('modalAssignGudangBesar')">Batal</button>
           <button type="submit" class="btn-primary-clean btn-sm" id="btnSubmitAssignTask" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);">
             <i class="fa-solid fa-paper-plane"></i> Kirim &amp; Assign Task
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: BATCH ASSIGN GUDANG BESAR -->
+  <!-- ========================================================================= -->
+  <div id="modalBatchAssignGB" class="clean-modal-overlay">
+    <div class="form-modal-box" style="max-width: 580px;">
+      <div class="form-modal-header" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff;">
+        <div>
+          <h3 style="color: #ffffff;"><i class="fa-solid fa-users-gear"></i> Batch Assign ke Gudang Besar</h3>
+          <p class="modal-subtext" style="color: rgba(255,255,255,0.85);" id="batchAssignSummaryText">0 SKU Terpilih</p>
+        </div>
+        <button type="button" class="modal-close-btn" style="color: #ffffff;" onclick="closeModal('modalBatchAssignGB')">&times;</button>
+      </div>
+
+      <form id="formBatchAssignGB" class="form-modal-body" onsubmit="submitBatchAssign(event)">
+        <!-- List SKU yang dipilih -->
+        <div class="field-item">
+          <label style="font-size: 0.76rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem; display: block;">Daftar SKU yang Akan Ditugaskan</label>
+          <div id="batchAssignSelectedList" style="max-height: 180px; overflow-y: auto; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 0.5rem 0.65rem; display: flex; flex-direction: column; gap: 0.35rem;">
+            <!-- Items rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Operator Target -->
+        <div class="field-item">
+          <label for="batchAssignSelectOperator" style="font-size: 0.76rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem; display: block;">Pilih Operator Gudang Besar <span style="color: #dc2626;">*</span></label>
+          <select id="batchAssignSelectOperator" style="width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.80rem; font-family: inherit;" required>
+            <option value="">-- Memuat daftar operator... --</option>
+          </select>
+        </div>
+
+        <!-- Aturan Jumlah / Qty -->
+        <div class="field-item">
+          <label for="batchAssignQtyMode" style="font-size: 0.76rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem; display: block;">Aturan Jumlah Replenish</label>
+          <select id="batchAssignQtyMode" style="width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.80rem; font-family: inherit;">
+            <option value="auto">Otomatis (Tutup Stok Minus + Cadangan 5 Pcs)</option>
+            <option value="fixed10">Tetap 10 Pcs per SKU</option>
+            <option value="fixed25">Tetap 25 Pcs per SKU</option>
+            <option value="max">Maksimal Stok Gudang Besar yang Tersedia</option>
+          </select>
+          <small class="field-hint">Jumlah otomatis dibatasi sesuai stok Gudang Besar yang tersedia.</small>
+        </div>
+
+        <!-- Catatan -->
+        <div class="field-item">
+          <label for="batchAssignInputNotes" style="font-size: 0.76rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem; display: block;">Catatan untuk Operator Gudang Besar</label>
+          <input type="text" id="batchAssignInputNotes" style="width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.78rem;" value="Stok minus di rak Gudang Kecil, mohon segera direplenish.">
+        </div>
+
+        <div class="form-modal-footer" style="display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid #f1f5f9;">
+          <button type="button" class="btn-secondary-clean btn-sm" onclick="closeModal('modalBatchAssignGB')">Batal</button>
+          <button type="submit" class="btn-primary-clean btn-sm" id="btnSubmitBatchAssign" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);">
+            <i class="fa-solid fa-paper-plane"></i> Kirim &amp; Tugaskan Semua
           </button>
         </div>
       </form>
@@ -1731,7 +1839,7 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=5.2.5"></script>
+  <script src="app.js?v=5.2.6"></script>
 </body>
 
 </html>

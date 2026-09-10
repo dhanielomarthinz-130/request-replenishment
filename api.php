@@ -380,6 +380,95 @@ if ($action === 'submit_replenish' || $action === 'assign_replenish_task') {
     ]);
 }
 
+if ($action === 'batch_assign_replenish_task') {
+    $items = $input['items'] ?? [];
+    $assignedTo = trim($input['assigned_to'] ?? '');
+    $notes = trim($input['notes'] ?? '');
+    $requestedBy = trim($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Admin');
+
+    if (!is_array($items) || empty($items)) {
+        jsonResp(['status' => 'error', 'message' => 'Tidak ada item SKU yang dipilih untuk di-assign.'], 400);
+    }
+    if (empty($assignedTo)) {
+        jsonResp(['status' => 'error', 'message' => 'Pilih Operator Gudang Besar yang ditugaskan.'], 400);
+    }
+
+    $created = [];
+    $pdo->beginTransaction();
+    try {
+        $insert = $pdo->prepare("INSERT INTO replenish_requests 
+            (request_no, bin_code, sku, product_name, barcode, qty_gudang_kecil, qty_gudang_besar, qty_request, requested_by, assigned_to, status, admin_notes, created_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, CURRENT_TIMESTAMP)");
+
+        $stockStmt = $pdo->prepare("SELECT qty_gudang_besar, qty_gudang_kecil, product_name, barcode FROM stock_master WHERE UPPER(sku) = UPPER(?)");
+        $binStmt = $pdo->prepare("SELECT bin_code FROM sku_rack_locations WHERE UPPER(sku) = UPPER(?) LIMIT 1");
+
+        foreach ($items as $idx => $item) {
+            $sku = trim($item['sku'] ?? '');
+            if (empty($sku)) continue;
+
+            $stockStmt->execute([$sku]);
+            $stock = $stockStmt->fetch();
+
+            $qtyKecil = $stock ? (int)$stock['qty_gudang_kecil'] : (int)($item['qty_gudang_kecil'] ?? 0);
+            $qtyBesar = $stock ? (int)$stock['qty_gudang_besar'] : (int)($item['qty_gudang_besar'] ?? 0);
+            $prodName = $stock ? $stock['product_name'] : ($item['product_name'] ?? $sku);
+            $barcode = $stock ? $stock['barcode'] : ($item['barcode'] ?? '');
+
+            $binCode = trim($item['bin_code'] ?? '');
+            if (empty($binCode) || strpos($binCode, 'BIN-') === 0) {
+                $binStmt->execute([$sku]);
+                $binRow = $binStmt->fetch();
+                if ($binRow && !empty($binRow['bin_code'])) {
+                    $binCode = $binRow['bin_code'];
+                } else if (empty($binCode)) {
+                    $binCode = 'BIN-' . $sku;
+                }
+            }
+
+            $qtyReq = (int)($item['qty_request'] ?? 0);
+            if ($qtyReq <= 0) {
+                if ($qtyKecil < 0) {
+                    $qtyReq = abs($qtyKecil) + 5;
+                } else {
+                    $qtyReq = 10;
+                }
+            }
+            if ($qtyBesar > 0 && $qtyReq > $qtyBesar) {
+                $qtyReq = $qtyBesar;
+            }
+
+            $requestNo = 'REP-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)) . ($idx + 1);
+            $itemNote = !empty($notes) ? $notes : ($qtyKecil < 0 ? "Stok minus {$qtyKecil} Pcs di rak Gudang Kecil, mohon segera direplenish." : "Replenish stok Gudang Kecil");
+
+            $insert->execute([
+                $requestNo, $binCode, $sku, $prodName, $barcode, $qtyKecil, $qtyBesar, $qtyReq, $requestedBy, $assignedTo, $itemNote
+            ]);
+
+            $created[] = [
+                'request_no' => $requestNo,
+                'sku' => $sku,
+                'qty_request' => $qtyReq,
+                'assigned_to' => $assignedTo
+            ];
+        }
+
+        $pdo->commit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        jsonResp(['status' => 'error', 'message' => 'Gagal menyimpan batch penugasan: ' . $e->getMessage()], 500);
+    }
+
+    $count = count($created);
+    jsonResp([
+        'status' => 'success',
+        'message' => "Berhasil menugaskan {$count} SKU ke Operator Gudang Besar ({$assignedTo}).",
+        'total_assigned' => $count,
+        'assigned_to' => $assignedTo,
+        'data' => $created
+    ]);
+}
+
 if ($action === 'get_replenish_requests') {
     $statusFilter = trim($input['status'] ?? '');
     $userFilter = trim($input['requested_by'] ?? '');
@@ -604,6 +693,81 @@ if ($action === 'toggle_cut_stock') {
         'new_status' => $newVal,
         'done_ocs' => ($type === 'ocs' ? $newVal : (int)$req['done_ocs']),
         'done_wms' => ($type === 'wms' ? $newVal : (int)$req['done_wms'])
+    ]);
+}
+
+if ($action === 'batch_complete_replenish') {
+    $ids = $input['ids'] ?? [];
+    $actionType = trim($input['action_type'] ?? 'complete_and_cut'); // 'complete_and_cut', 'done_ocs', 'done_wms'
+    $processedBy = trim($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Admin');
+
+    if (!is_array($ids) || empty($ids)) {
+        jsonResp(['status' => 'error', 'message' => 'Pilih setidaknya 1 permohonan replenish.'], 400);
+    }
+
+    $sanitizedIds = array_values(array_unique(array_filter(array_map('intval', $ids))));
+    if (empty($sanitizedIds)) {
+        jsonResp(['status' => 'error', 'message' => 'ID permintaan tidak valid.'], 400);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $placeholders = implode(',', array_fill(0, count($sanitizedIds), '?'));
+
+        if ($actionType === 'done_ocs') {
+            $stmt = $pdo->prepare("UPDATE replenish_requests SET done_ocs = 1, done_ocs_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id IN ($placeholders)");
+            $stmt->execute($sanitizedIds);
+            $msg = "Berhasil menandai Done OCS untuk " . count($sanitizedIds) . " permintaan replenish.";
+        } elseif ($actionType === 'done_wms') {
+            $stmt = $pdo->prepare("UPDATE replenish_requests SET done_wms = 1, done_wms_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id IN ($placeholders)");
+            $stmt->execute($sanitizedIds);
+            $msg = "Berhasil menandai Done WMS untuk " . count($sanitizedIds) . " permintaan replenish.";
+        } else {
+            // 'complete_and_cut': mark COMPLETED + done_ocs=1 + done_wms=1 + adjust stock
+            $fetchStmt = $pdo->prepare("SELECT id, sku, qty_request, status FROM replenish_requests WHERE id IN ($placeholders)");
+            $fetchStmt->execute($sanitizedIds);
+            $reqs = $fetchStmt->fetchAll();
+
+            $stockUpdate = $pdo->prepare("UPDATE stock_master SET 
+                qty_gudang_kecil = qty_gudang_kecil + ?,
+                qty_gudang_besar = CASE WHEN qty_gudang_besar >= ? THEN qty_gudang_besar - ? ELSE 0 END,
+                last_synced_at = CURRENT_TIMESTAMP
+                WHERE UPPER(sku) = UPPER(?)");
+
+            foreach ($reqs as $rq) {
+                if ($rq['status'] !== 'COMPLETED') {
+                    $qty = (int)$rq['qty_request'];
+                    $stockUpdate->execute([$qty, $qty, $qty, $rq['sku']]);
+                }
+            }
+
+            $updateStmt = $pdo->prepare("UPDATE replenish_requests SET 
+                status = 'COMPLETED',
+                done_ocs = 1,
+                done_wms = 1,
+                done_ocs_at = COALESCE(done_ocs_at, CURRENT_TIMESTAMP),
+                done_wms_at = COALESCE(done_wms_at, CURRENT_TIMESTAMP),
+                picked_at = COALESCE(picked_at, CURRENT_TIMESTAMP),
+                processed_by = ?,
+                updated_at = CURRENT_TIMESTAMP
+                WHERE id IN ($placeholders)");
+            $updateParams = array_merge([$processedBy], $sanitizedIds);
+            $updateStmt->execute($updateParams);
+
+            $msg = "Berhasil menyelesaikan & memotong stok (" . count($sanitizedIds) . " permintaan bertanda Selesai, Done OCS & Done WMS).";
+        }
+
+        $pdo->commit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        jsonResp(['status' => 'error', 'message' => 'Gagal memproses batch: ' . $e->getMessage()], 500);
+    }
+
+    jsonResp([
+        'status' => 'success',
+        'message' => $msg,
+        'action_type' => $actionType,
+        'total_processed' => count($sanitizedIds)
     ]);
 }
 
@@ -930,14 +1094,18 @@ if ($action === 'get_negative_stocks') {
     // Anything at or below the threshold counts as "minus" for the operator:
     // 0 already blocks picking, so it is surfaced next to the true negatives.
     $threshold = isset($input['threshold']) ? (int)$input['threshold'] : 0;
+    $assignedFilter = strtoupper(trim($input['assigned_filter'] ?? 'ALL'));
 
     $sql = "SELECT s.id, s.sku,
                    COALESCE(NULLIF(s.barcode, ''), NULLIF(MAX(r.barcode), ''), '-') as barcode,
                    s.product_name, s.area_id, s.qty_on_hand, s.qty_available,
                    s.qty_gudang_kecil, s.qty_gudang_besar, s.last_synced_at,
-                   MAX(r.bin_code) as bin_code, MAX(r.rack_name) as rack_name
+                   MAX(r.bin_code) as bin_code, MAX(r.rack_name) as rack_name,
+                   MAX(CASE WHEN req.status IN ('PENDING', 'APPROVED') AND req.assigned_to IS NOT NULL AND req.assigned_to != '' THEN req.assigned_to ELSE NULL END) as active_assigned_to,
+                   MAX(CASE WHEN req.status IN ('PENDING', 'APPROVED') AND req.assigned_to IS NOT NULL AND req.assigned_to != '' THEN req.request_no ELSE NULL END) as active_request_no
             FROM stock_master s
             LEFT JOIN sku_rack_locations r ON UPPER(s.sku) = UPPER(r.sku)
+            LEFT JOIN replenish_requests req ON UPPER(s.sku) = UPPER(req.sku) AND req.status IN ('PENDING', 'APPROVED')
             WHERE s.qty_gudang_kecil <= ?";
     $params = [$threshold];
 
@@ -947,20 +1115,35 @@ if ($action === 'get_negative_stocks') {
         array_push($params, $term, $term, $term, $term);
     }
 
-    $sql .= " GROUP BY s.id ORDER BY s.qty_gudang_kecil ASC, s.sku ASC LIMIT 500";
+    $sql .= " GROUP BY s.id, s.sku";
+
+    if ($assignedFilter === 'ASSIGNED') {
+        $sql .= " HAVING active_assigned_to IS NOT NULL";
+    } elseif ($assignedFilter === 'UNASSIGNED') {
+        $sql .= " HAVING active_assigned_to IS NULL";
+    }
+
+    $sql .= " ORDER BY s.qty_gudang_kecil ASC, s.sku ASC LIMIT 500";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
 
     $trueMinus = 0;
+    $totalAssigned = 0;
+    $totalUnassigned = 0;
     foreach ($rows as $row) {
         if ((int)$row['qty_gudang_kecil'] < 0) $trueMinus++;
+        if (!empty($row['active_assigned_to'])) $totalAssigned++;
+        else $totalUnassigned++;
     }
 
     jsonResp([
         'status' => 'success',
         'threshold' => $threshold,
+        'assigned_filter' => $assignedFilter,
         'total_minus' => $trueMinus,
+        'total_assigned' => $totalAssigned,
+        'total_unassigned' => $totalUnassigned,
         'total_rows' => count($rows),
         'data' => $rows
     ]);
