@@ -17,3 +17,6 @@ Thumbs.db
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# Scratch testing files
+scratch/

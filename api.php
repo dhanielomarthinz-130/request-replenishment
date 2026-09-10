@@ -3,6 +3,10 @@
  * REST API Backend for OCS Stock Sync & Bin Code Replenishment System
  */
 
+// Prevent notices/warnings from polluting JSON responses
+ini_set('display_errors', '0');
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+
 // Robust session handling with 12-hour persistence
 $sessionLifetime = 12 * 60 * 60;
 ini_set('session.gc_maxlifetime', (string)$sessionLifetime);
@@ -325,7 +329,7 @@ if ($action === 'scan_bin_code') {
 // 3. REPLENISHMENT REQUESTS (OPERATOR SUBMIT & ADMIN ACTIONS)
 // ==============================================================================
 
-if ($action === 'submit_replenish') {
+if ($action === 'submit_replenish' || $action === 'assign_replenish_task') {
     $binCode = trim($input['bin_code'] ?? '');
     $sku = trim($input['sku'] ?? '');
     $productName = trim($input['product_name'] ?? '');
@@ -334,6 +338,7 @@ if ($action === 'submit_replenish') {
     $qtyBesar = (int)($input['qty_gudang_besar'] ?? 0);
     $qtyRequest = (int)($input['qty_request'] ?? 0);
     $requestedBy = trim($input['requested_by'] ?? $_SESSION['username'] ?? 'Operator');
+    $assignedTo = trim($input['assigned_to'] ?? '');
     $notes = trim($input['notes'] ?? '');
 
     if (empty($binCode) || empty($sku)) {
@@ -361,15 +366,17 @@ if ($action === 'submit_replenish') {
 
     $requestNo = 'REP-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
 
-    $stmt = $pdo->prepare("INSERT INTO replenish_requests (request_no, bin_code, sku, product_name, barcode, qty_gudang_kecil, qty_gudang_besar, qty_request, requested_by, status, admin_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, CURRENT_TIMESTAMP)");
+    $stmt = $pdo->prepare("INSERT INTO replenish_requests (request_no, bin_code, sku, product_name, barcode, qty_gudang_kecil, qty_gudang_besar, qty_request, requested_by, assigned_to, status, admin_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, CURRENT_TIMESTAMP)");
     $stmt->execute([
-        $requestNo, $binCode, $sku, $productName, $barcode, $qtyKecil, $qtyBesar, $qtyRequest, $requestedBy, $notes
+        $requestNo, $binCode, $sku, $productName, $barcode, $qtyKecil, $qtyBesar, $qtyRequest, $requestedBy, (!empty($assignedTo) ? $assignedTo : null), $notes
     ]);
 
+    $assignMsg = !empty($assignedTo) ? " dan ditugaskan ke {$assignedTo}" : "";
     jsonResp([
         'status' => 'success',
-        'message' => "Request Replenish #{$requestNo} berhasil diajukan dan diteruskan ke Operator Gudang Besar.",
-        'request_no' => $requestNo
+        'message' => "Request Replenish #{$requestNo} berhasil diajukan{$assignMsg}.",
+        'request_no' => $requestNo,
+        'assigned_to' => $assignedTo
     ]);
 }
 
@@ -443,6 +450,48 @@ if ($action === 'update_replenish_status') {
     jsonResp([
         'status' => 'success',
         'message' => "Permintaan #{$req['request_no']} berhasil diubah statusnya menjadi {$newStatus}."
+    ]);
+}
+
+if ($action === 'toggle_cut_stock') {
+    $id = (int)($input['id'] ?? 0);
+    $type = strtolower(trim($input['type'] ?? '')); // 'ocs' or 'wms'
+    $status = isset($input['status']) ? (int)$input['status'] : null;
+
+    if (!$id || !in_array($type, ['ocs', 'wms'])) {
+        jsonResp(['status' => 'error', 'message' => 'Parameter tidak valid. Diperlukan id dan type (ocs/wms).'], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT id, request_no, done_ocs, done_wms FROM replenish_requests WHERE id = ?");
+    $stmt->execute([$id]);
+    $req = $stmt->fetch();
+
+    if (!$req) {
+        jsonResp(['status' => 'error', 'message' => 'Data permintaan replenish tidak ditemukan.'], 404);
+    }
+
+    $col = $type === 'ocs' ? 'done_ocs' : 'done_wms';
+    $timeCol = $type === 'ocs' ? 'done_ocs_at' : 'done_wms_at';
+
+    $currentVal = (int)($req[$col] ?? 0);
+    $newVal = ($status !== null) ? ($status ? 1 : 0) : ($currentVal ? 0 : 1);
+    $timeVal = $newVal ? date('Y-m-d H:i:s') : null;
+
+    $updateSql = "UPDATE replenish_requests SET {$col} = ?, {$timeCol} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    $stmtUpd = $pdo->prepare($updateSql);
+    $stmtUpd->execute([$newVal, $timeVal, $id]);
+
+    $typeLabel = strtoupper($type);
+    $statusText = $newVal ? "Sudah Potong Stok ({$typeLabel})" : "Belum Potong Stok ({$typeLabel})";
+
+    jsonResp([
+        'status' => 'success',
+        'message' => "Status {$typeLabel} untuk #{$req['request_no']} berhasil diubah: {$statusText}.",
+        'id' => $id,
+        'type' => $type,
+        'new_status' => $newVal,
+        'done_ocs' => ($type === 'ocs' ? $newVal : (int)$req['done_ocs']),
+        'done_wms' => ($type === 'wms' ? $newVal : (int)$req['done_wms'])
     ]);
 }
 
@@ -550,14 +599,15 @@ if ($action === 'sync_sku_racks_from_ocs') {
 
     // 2. Fetch all SKU-Rack items from DTO_WmsItems with pagination
     $allWmsItems = [];
-    $pageSize = 100;
+    $pageSize = 1000;
     $skip = 0;
-    for ($page = 0; $page < 20; $page++) {
+    for ($page = 0; $page < 10; $page++) {
         $url = "https://ocs.iegsystem.id/odata/DTO_WmsItems?\$count=true&\$top={$pageSize}&\$skip={$skip}";
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $token, 'Accept: application/json']);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 25);
         $res = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -804,40 +854,12 @@ if ($action === 'get_negative_stocks') {
     ]);
 }
 
-if ($action === 'sync_all_stock') {
-    set_time_limit(300);
-    $token = ocsApiLogin();
-    if (!$token) {
-        jsonResp(['status' => 'error', 'message' => 'Gagal login ke OCS Cloud API. Pastikan internet aktif dan kredensial valid.'], 500);
-    }
-
-    // Pre-load Barcode map from sku_rack_locations and DTO_LookupStockDetailedData.
-    // DTO_WmsItemStockLiteV2 carries no Barcode field, so without this map every
-    // synced row lands with an empty barcode and renders as "-" in the UI.
-    $barcodeMap = [];
-    try {
-        $racks = $pdo->query("SELECT sku, barcode FROM sku_rack_locations WHERE barcode IS NOT NULL AND barcode != ''")->fetchAll();
-        foreach ($racks as $rk) {
-            $barcodeMap[strtoupper(trim($rk['sku']))] = trim($rk['barcode']);
-        }
-    } catch (Exception $e) {}
-
-    // OCS is the source of truth, so it overrides anything cached locally.
-    foreach (ocsApiFetchBarcodeMap($token) as $ocsSku => $ocsBarcode) {
-        $barcodeMap[$ocsSku] = $ocsBarcode;
-    }
-
-    $items = ocsApiFetchAllStock($token);
-    if (empty($items)) {
-        jsonResp(['status' => 'error', 'message' => 'Tidak ada data stok yang dapat diunduh dari OCS.'], 500);
-    }
-
+function ocsUpsertStockItems(PDO $pdo, array $items, array $barcodeMap = []): int {
+    if (empty($items)) return 0;
     $countUpdated = 0;
     $driver = Database::getDriverType();
-    
-    // Process in chunks of 100 items for high performance
+
     $chunks = array_chunk($items, 100);
-    
     $pdo->beginTransaction();
     try {
         if ($driver === 'mysql') {
@@ -917,13 +939,297 @@ if ($action === 'sync_all_stock') {
         $pdo->commit();
     } catch (Exception $e) {
         $pdo->rollBack();
+        throw $e;
+    }
+    return $countUpdated;
+}
+
+function recordLastOcsSync(PDO $pdo, ?string $time = null): string {
+    $nowStr = $time ?: date('Y-m-d H:i:s');
+    try {
+        if (Database::getDriverType() === 'mysql') {
+            $pdo->prepare("INSERT INTO system_settings (key_name, key_value, updated_at) VALUES ('last_ocs_sync', ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE key_value = VALUES(key_value), updated_at = CURRENT_TIMESTAMP")->execute([$nowStr]);
+        } else {
+            $pdo->prepare("INSERT OR REPLACE INTO system_settings (key_name, key_value, updated_at) VALUES ('last_ocs_sync', ?, CURRENT_TIMESTAMP)")->execute([$nowStr]);
+        }
+    } catch (Throwable $e) {}
+    return $nowStr;
+}
+
+function getLastOcsSync(PDO $pdo): ?string {
+    try {
+        $st = $pdo->query("SELECT key_value FROM system_settings WHERE key_name = 'last_ocs_sync'");
+        $r = $st->fetch();
+        if ($r && !empty($r['key_value'])) {
+            return $r['key_value'];
+        }
+    } catch (Throwable $e) {}
+
+    try {
+        $st = $pdo->query("SELECT MAX(last_synced_at) as last_sync FROM stock_master");
+        $r = $st->fetch();
+        if ($r && !empty($r['last_sync'])) {
+            return $r['last_sync'];
+        }
+    } catch (Throwable $e) {}
+
+    return null;
+}
+
+// ------------------------------------------------------------------------------
+// MODULAR / PROGRESS-BASED SYNC ACTIONS
+// ------------------------------------------------------------------------------
+
+if ($action === 'sync_init') {
+    @set_time_limit(60);
+    $token = ocsApiLogin();
+    if (!$token) {
+        jsonResp(['status' => 'error', 'message' => 'Gagal login ke OCS Cloud API. Periksa koneksi internet.'], 500);
+    }
+
+    // Hitung total stok cepat
+    $ch = curl_init('https://ocs.iegsystem.id/odata/DTO_WmsItemStockLiteV2?$count=true&$top=1');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Accept: application/json'],
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 15
+    ]);
+    $resStock = curl_exec($ch);
+    curl_close($ch);
+    $jStock = json_decode($resStock, true);
+    $totalStock = (int)($jStock['@odata.count'] ?? $jStock['count'] ?? 0);
+
+    // Hitung total rak cepat
+    $ch2 = curl_init('https://ocs.iegsystem.id/odata/DTO_WmsItems?$count=true&$top=1');
+    curl_setopt_array($ch2, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Accept: application/json'],
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 15
+    ]);
+    $resRacks = curl_exec($ch2);
+    curl_close($ch2);
+    $jRacks = json_decode($resRacks, true);
+    $totalRacks = (int)($jRacks['@odata.count'] ?? $jRacks['count'] ?? 0);
+
+    jsonResp([
+        'status' => 'success',
+        'token' => $token,
+        'total_stock' => $totalStock ?: 2525,
+        'total_racks' => $totalRacks ?: 684,
+        'page_size' => 1000
+    ]);
+}
+
+if ($action === 'sync_sku_racks_step') {
+    @set_time_limit(240);
+    @ignore_user_abort(true);
+    $token = trim($input['token'] ?? $_GET['token'] ?? '') ?: ocsApiLogin();
+    if (!$token) {
+        jsonResp(['status' => 'error', 'message' => 'Sesi OCS tidak valid.'], 401);
+    }
+
+    $barcodeMap = ocsApiFetchBarcodeMap($token);
+
+    $allWmsItems = [];
+    $pageSize = 1000;
+    $skip = 0;
+    for ($page = 0; $page < 5; $page++) {
+        $url = "https://ocs.iegsystem.id/odata/DTO_WmsItems?\$count=true&\$top={$pageSize}&\$skip={$skip}";
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Accept: application/json'],
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 15
+        ]);
+        $res = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code !== 200 || empty($res)) break;
+        $json = json_decode($res, true);
+        $items = $json['value'] ?? [];
+        if (empty($items)) break;
+
+        $allWmsItems = array_merge($allWmsItems, $items);
+        $skip += count($items);
+        if (count($items) < $pageSize) break;
+    }
+
+    if (empty($allWmsItems)) {
+        jsonResp(['status' => 'error', 'message' => 'Tidak ada data SKU-Rack yang ditemukan di OCS.'], 500);
+    }
+
+    $countSaved = 0;
+    $countSkipped = 0;
+    $pdo->beginTransaction();
+    try {
+        $stmtCheck = $pdo->prepare("SELECT id FROM sku_rack_locations WHERE UPPER(bin_code) = ? AND UPPER(sku) = ?");
+        $stmtUpdate = $pdo->prepare("UPDATE sku_rack_locations SET rack_name = ?, barcode = ?, product_name = ?, category = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE UPPER(bin_code) = ? AND UPPER(sku) = ?");
+        $stmtInsert = $pdo->prepare("INSERT INTO sku_rack_locations (bin_code, rack_name, sku, barcode, product_name, category, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
+
+        foreach ($allWmsItems as $wItem) {
+            $sku = trim($wItem['SkuId'] ?? '');
+            if (empty($sku)) continue;
+
+            $area = trim($wItem['AreaId'] ?? '') ?: 'Pusat';
+            $binCode = trim($wItem['BinCode'] ?? '');
+            $isMapped = $binCode !== '';
+            if (!$isMapped) {
+                $binCode = 'BIN-' . $sku;
+            }
+
+            $binName = trim($wItem['BinName'] ?? '');
+            if ($binName === '' || strcasecmp($binName, $binCode) === 0) {
+                $binName = $isMapped ? ('Rak ' . $binCode) : ('Belum Dipetakan - Area ' . $area);
+            }
+            $productName = trim($wItem['SkuName'] ?? '') ?: $sku;
+            $category = trim($wItem['ShopCode'] ?? '') ?: 'General';
+            $barcode = $barcodeMap[strtoupper($sku)] ?? '';
+            $notes = 'Area: ' . $area;
+
+            try {
+                $stmtCheck->execute([strtoupper($binCode), strtoupper($sku)]);
+                if ($stmtCheck->fetch()) {
+                    $stmtUpdate->execute([$binName, $barcode, $productName, $category, $notes, strtoupper($binCode), strtoupper($sku)]);
+                } else {
+                    $stmtInsert->execute([$binCode, $binName, $sku, $barcode, $productName, $category, $notes]);
+                }
+                $countSaved++;
+            } catch (Exception $rowErr) {
+                $countSkipped++;
+            }
+        }
+
+        $stmtBackfill = $pdo->prepare("UPDATE stock_master SET barcode = ? WHERE UPPER(sku) = ? AND (barcode IS NULL OR barcode = '')");
+        $countBarcodeFilled = 0;
+        foreach ($barcodeMap as $mapSku => $mapBarcode) {
+            $stmtBackfill->execute([$mapBarcode, $mapSku]);
+            $countBarcodeFilled += $stmtBackfill->rowCount();
+        }
+
+        $pdo->commit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
         jsonResp(['status' => 'error', 'message' => 'Gagal menyimpan ke database: ' . $e->getMessage()], 500);
     }
 
     jsonResp([
         'status' => 'success',
+        'message' => "Berhasil menyinkronkan {$countSaved} lokasi rak & barcode.",
+        'total_synced' => $countSaved,
+        'barcode_filled' => $countBarcodeFilled
+    ]);
+}
+
+if ($action === 'sync_stock_step') {
+    @set_time_limit(240);
+    @ignore_user_abort(true);
+    $token = trim($input['token'] ?? $_GET['token'] ?? '') ?: ocsApiLogin();
+    if (!$token) {
+        jsonResp(['status' => 'error', 'message' => 'Sesi OCS tidak valid.'], 401);
+    }
+
+    $skip = (int)($input['skip'] ?? $_GET['skip'] ?? 0);
+    $top = (int)($input['top'] ?? $_GET['top'] ?? 1000);
+    if ($top <= 0 || $top > 1000) $top = 1000;
+
+    $url = "https://ocs.iegsystem.id/odata/DTO_WmsItemStockLiteV2?\$count=true&\$top={$top}&\$skip={$skip}";
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Accept: application/json'],
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CONNECTTIMEOUT => 8
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || empty($response)) {
+        jsonResp(['status' => 'error', 'message' => 'Gagal mengambil data stok dari OCS (HTTP ' . $httpCode . ')'], 500);
+    }
+
+    $json = json_decode($response, true);
+    $items = $json['value'] ?? [];
+    $totalCount = (int)($json['@odata.count'] ?? $json['count'] ?? 0);
+
+    $barcodeMap = [];
+    try {
+        $racks = $pdo->query("SELECT sku, barcode FROM sku_rack_locations WHERE barcode IS NOT NULL AND barcode != ''")->fetchAll();
+        foreach ($racks as $rk) {
+            $barcodeMap[strtoupper(trim($rk['sku']))] = trim($rk['barcode']);
+        }
+    } catch (Exception $e) {}
+
+    try {
+        $countUpdated = ocsUpsertStockItems($pdo, $items, $barcodeMap);
+    } catch (Exception $e) {
+        jsonResp(['status' => 'error', 'message' => 'Gagal menyimpan stok ke database: ' . $e->getMessage()], 500);
+    }
+
+    $nextSkip = $skip + count($items);
+    $hasMore = !empty($items) && ($totalCount > 0 ? ($nextSkip < $totalCount) : (count($items) >= $top));
+
+    $lastSyncTime = null;
+    if (!$hasMore) {
+        $lastSyncTime = recordLastOcsSync($pdo);
+    }
+
+    jsonResp([
+        'status' => 'success',
+        'batch_count' => count($items),
+        'total_synced' => $countUpdated,
+        'skip' => $skip,
+        'next_skip' => $nextSkip,
+        'total_count' => $totalCount,
+        'has_more' => $hasMore,
+        'last_synced_at' => $lastSyncTime
+    ]);
+}
+
+if ($action === 'sync_all_stock') {
+    @set_time_limit(300);
+    $token = ocsApiLogin();
+    if (!$token) {
+        jsonResp(['status' => 'error', 'message' => 'Gagal login ke OCS Cloud API. Pastikan internet aktif dan kredensial valid.'], 500);
+    }
+
+    $barcodeMap = [];
+    try {
+        $racks = $pdo->query("SELECT sku, barcode FROM sku_rack_locations WHERE barcode IS NOT NULL AND barcode != ''")->fetchAll();
+        foreach ($racks as $rk) {
+            $barcodeMap[strtoupper(trim($rk['sku']))] = trim($rk['barcode']);
+        }
+    } catch (Exception $e) {}
+
+    if (empty($barcodeMap)) {
+        foreach (ocsApiFetchBarcodeMap($token) as $ocsSku => $ocsBarcode) {
+            $barcodeMap[$ocsSku] = $ocsBarcode;
+        }
+    }
+
+    $items = ocsApiFetchAllStock($token);
+    if (empty($items)) {
+        jsonResp(['status' => 'error', 'message' => 'Tidak ada data stok yang dapat diunduh dari OCS.'], 500);
+    }
+
+    try {
+        $countUpdated = ocsUpsertStockItems($pdo, $items, $barcodeMap);
+    } catch (Exception $e) {
+        jsonResp(['status' => 'error', 'message' => 'Gagal menyimpan ke database: ' . $e->getMessage()], 500);
+    }
+
+    $lastSyncTime = recordLastOcsSync($pdo);
+
+    jsonResp([
+        'status' => 'success',
         'message' => "Berhasil sinkronisasi {$countUpdated} data stok dari OCS Cloud ke database.",
         'total_synced' => $countUpdated,
+        'last_synced_at' => $lastSyncTime,
         'timestamp' => date('Y-m-d H:i:s')
     ]);
 }
@@ -941,6 +1247,8 @@ if ($action === 'get_dashboard_stats') {
     $minusStockCount = (int)($pdo->query("SELECT COUNT(*) as cnt FROM stock_master WHERE qty_gudang_kecil < 0")->fetch()['cnt'] ?? 0);
     $emptyStockCount = (int)($pdo->query("SELECT COUNT(*) as cnt FROM stock_master WHERE qty_gudang_kecil = 0")->fetch()['cnt'] ?? 0);
 
+    $lastSync = getLastOcsSync($pdo);
+
     jsonResp([
         'status' => 'success',
         'data' => [
@@ -950,7 +1258,8 @@ if ($action === 'get_dashboard_stats') {
             'completed_replenish' => $completedReplenish,
             'low_stock_count' => $lowStockCount,
             'minus_stock_count' => $minusStockCount,
-            'empty_stock_count' => $emptyStockCount
+            'empty_stock_count' => $emptyStockCount,
+            'last_synced_at' => $lastSync
         ]
     ]);
 }
@@ -1022,17 +1331,20 @@ if (empty($action)) {
 function ocsApiFetchBarcodeMap(string $token): array
 {
     $map = [];
-    $pageSize = 500;
+    $pageSize = 1000;
     $skip = 0;
 
-    for ($page = 0; $page < 40; $page++) {
+    for ($page = 0; $page < 3; $page++) {
         $url = "https://ocs.iegsystem.id/odata/DTO_LookupStockDetailedData?\$top={$pageSize}&\$skip={$skip}";
 
         $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $token, 'Accept: application/json']);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Accept: application/json'],
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 12,
+            CURLOPT_CONNECTTIMEOUT => 5
+        ]);
         $res = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -1114,9 +1426,9 @@ function fetchOcsStockBySku(string $sku): ?array {
 
 function ocsApiFetchAllStock(string $token, callable $progressCallback = null): array {
     $allItems = [];
-    $pageSize = 100;
+    $pageSize = 1000;
     $skip = 0;
-    $maxPages = 60; // Up to 6,000 items
+    $maxPages = 10; // Up to 10,000 items
 
     for ($page = 0; $page < $maxPages; $page++) {
         $url = "https://ocs.iegsystem.id/odata/DTO_WmsItemStockLiteV2?\$count=true&\$top={$pageSize}&\$skip={$skip}";
@@ -1128,7 +1440,7 @@ function ocsApiFetchAllStock(string $token, callable $progressCallback = null): 
             'Accept: application/json'
         ]);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

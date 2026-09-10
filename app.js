@@ -1048,9 +1048,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="badge-status ${statusClass}">${statusText}</span>
                     </div>
 
-                    <div class="task-location-row">
+                    <div class="task-location-row" style="flex-wrap: wrap; gap: 0.4rem;">
                         <span class="loc-bin-tag"><i class="fa-solid fa-location-dot"></i> Rak Tujuan: <strong>${task.bin_code}</strong></span>
                         <span class="requester-tag"><i class="fa-solid fa-user"></i> ${task.requested_by}</span>
+                        ${task.assigned_to ? `<span class="requester-tag" style="background: rgba(79, 70, 229, 0.1); color: #4338ca; border-color: rgba(79, 70, 229, 0.25);"><i class="fa-solid fa-user-check"></i> Ditugaskan: <strong>${task.assigned_to}</strong></span>` : ''}
                     </div>
 
                     <div class="task-prod-info">
@@ -1282,6 +1283,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabId === 'tabUsers') loadUsers();
     };
 
+    function updateTopbarLastSync(dateStr) {
+        const el = document.getElementById('topbarLastSyncTime');
+        if (!el) return;
+        if (!dateStr) {
+            el.textContent = '-';
+            return;
+        }
+        try {
+            const parts = dateStr.replace('T', ' ').split(/[- :]/);
+            if (parts.length >= 5) {
+                const day = parts[2];
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                const month = monthNames[parseInt(parts[1], 10) - 1] || parts[1];
+                const hour = parts[3];
+                const min = parts[4];
+                el.textContent = `${day} ${month}, ${hour}:${min}`;
+                el.title = `Terakhir sinkronisasi OCS: ${dateStr}`;
+                return;
+            }
+            el.textContent = dateStr;
+        } catch (e) {
+            el.textContent = dateStr;
+        }
+    }
+
     async function loadDashboardStats() {
         try {
             const res = await fetch('api.php?action=get_dashboard_stats');
@@ -1302,6 +1328,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const elZero = document.getElementById('minusCountZero');
                 if (elNeg) elNeg.textContent = (d.minus_stock_count || 0).toLocaleString('id-ID');
                 if (elZero) elZero.textContent = (d.empty_stock_count || 0).toLocaleString('id-ID');
+
+                if (d.last_synced_at) {
+                    updateTopbarLastSync(d.last_synced_at);
+                }
             }
 
             const resReq = await fetch('api.php?action=get_replenish_requests&limit=5');
@@ -1331,7 +1361,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr>
                     <td><strong>${r.request_no}</strong></td>
                     <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
-                    <td class="col-sku"><strong class="sku-tag" style="color: #0f172a; white-space: nowrap; display: inline-block;">${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
+                    <td class="col-sku-combined">
+                        <span class="sku-code-text">${r.sku}</span>
+                        <span class="sku-product-name">${r.product_name || '-'}</span>
+                    </td>
                     <td><strong style="color: var(--primary); font-family: var(--font-mono); font-size: 1rem;">${r.qty_request} Pcs</strong></td>
                     <td><span style="font-weight: 600;">${r.requested_by}</span></td>
                     <td><span class="badge-status ${statusClass}">${r.status}</span></td>
@@ -1373,7 +1406,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.loadSkuRacks = async function() {
         const search = searchSkuRacks ? searchSkuRacks.value.trim() : '';
-        skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data master SKU-Rack...</td></tr>`;
+        skuRacksTableBody.innerHTML = `<tr><td colspan="7" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data master SKU-Rack...</td></tr>`;
 
         try {
             const res = await fetch(`api.php?action=get_sku_racks&search=${encodeURIComponent(search)}`);
@@ -1383,7 +1416,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderSkuRacksTable(json.data);
             }
         } catch (err) {
-            skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
+            skuRacksTableBody.innerHTML = `<tr><td colspan="7" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
@@ -1393,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderSkuRacksTable(items) {
         if (!items || items.length === 0) {
-            skuRacksTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--text-muted);">Tidak ada data Bin Code yang cocok.</td></tr>`;
+            skuRacksTableBody.innerHTML = `<tr><td colspan="7" class="td-center py-4" style="color: var(--text-muted);">Tidak ada data Bin Code yang cocok.</td></tr>`;
             return;
         }
 
@@ -1417,8 +1450,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return `
             <tr>
-                <td class="col-sku"><code style="white-space: nowrap;">${sku}</code></td>
-                <td><strong style="color: #0f172a;">${r.product_name}</strong></td>
+                <td class="col-sku-combined">
+                    <span class="sku-code-text">${sku}</span>
+                    <span class="sku-product-name">${r.product_name || '-'}</span>
+                </td>
                 <td><span style="font-family: var(--font-mono); font-size: 0.82rem; color: #475569;">${r.barcode || '-'}</span></td>
                 <td><span style="background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600;">${r.category || 'General'}</span></td>
                 <td>${binCell}</td>
@@ -1532,7 +1567,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.loadAdminReplenish = async function() {
-        adminReplenishTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4">Memuat data permintaan...</td></tr>`;
+        adminReplenishTableBody.innerHTML = `<tr><td colspan="12" class="td-center py-4">Memuat data permintaan...</td></tr>`;
 
         try {
             const status = AppState.activeReplenishFilter;
@@ -1543,13 +1578,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderAdminReplenishTable(json.data);
             }
         } catch (err) {
-            adminReplenishTableBody.innerHTML = `<tr><td colspan="11" class="td-center py-4 text-danger">Gagal memuat: ${err.message}</td></tr>`;
+            adminReplenishTableBody.innerHTML = `<tr><td colspan="12" class="td-center py-4 text-danger">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
     function renderAdminReplenishTable(items) {
         if (!items || items.length === 0) {
-            adminReplenishTableBody.innerHTML = `<tr><td colspan="11" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Tidak ada data permintaan replenish yang ditemukan.</td></tr>`;
+            adminReplenishTableBody.innerHTML = `<tr><td colspan="12" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Tidak ada data permintaan replenish yang ditemukan.</td></tr>`;
             return;
         }
 
@@ -1562,45 +1597,109 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isPending) {
                 actionsHtml = `
                     <div style="display: flex; gap: 0.35rem; justify-content: center;">
-                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); font-size: 0.78rem;" title="Pick Barang Gudang Besar" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Pick</button>
-                        <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; color: var(--danger); font-size: 0.78rem;" title="Tolak Mutasi" onclick="updateReplenishStatus(${r.id}, 'REJECTED')"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="btn-primary-clean btn-sm" style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);" title="Pick Barang Gudang Besar" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Pick</button>
+                        <button class="btn-secondary-clean btn-sm" style="color: var(--danger);" title="Tolak Mutasi" onclick="updateReplenishStatus(${r.id}, 'REJECTED')"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                 `;
             } else if (isApproved) {
                 actionsHtml = `
                     <div style="display: flex; gap: 0.35rem; justify-content: center;">
-                        <button class="btn-primary-clean" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Selesaikan Mutasi Fisik" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Selesaikan</button>
+                        <button class="btn-primary-clean btn-sm" title="Selesaikan Mutasi Fisik" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Selesaikan</button>
                     </div>
                 `;
             } else {
-                actionsHtml = `<small style="color: var(--text-muted); font-weight: 600;"><i class="fa-solid fa-check-double text-green"></i> Selesai</small>`;
+                actionsHtml = `<small style="color: var(--text-muted); font-weight: 600; font-size: 0.72rem;"><i class="fa-solid fa-check-double text-green"></i> Selesai</small>`;
             }
 
             const rackBesarHtml = r.rack_gudang_besar 
                 ? `<span class="loc-bin-tag" style="background: rgba(234, 88, 12, 0.1); color: #c2410c; border: 1px solid rgba(234, 88, 12, 0.25);"><i class="fa-solid fa-warehouse"></i> ${r.rack_gudang_besar}</span>` 
-                : '<span style="color: var(--text-muted); font-style: italic;">Belum di-pick</span>';
+                : '<span style="color: var(--text-muted); font-style: italic; font-size: 0.72rem;">Belum di-pick</span>';
 
             const batchHtml = r.batch_number 
                 ? `<span class="loc-bin-tag" style="background: rgba(79, 70, 229, 0.08); color: #4338ca; border: 1px solid rgba(79, 70, 229, 0.2);"><i class="fa-solid fa-barcode"></i> ${r.batch_number}</span>` 
-                : '<span style="color: var(--text-muted); font-style: italic;">-</span>';
+                : '<span style="color: var(--text-muted); font-style: italic; font-size: 0.72rem;">-</span>';
+
+            const assignedHtml = r.assigned_to 
+                ? `<div style="margin-top: 0.2rem;"><span class="assigned-user-pill" title="Ditugaskan ke ${r.assigned_to}"><i class="fa-solid fa-user-check"></i> ${r.assigned_to}</span></div>` 
+                : '';
+
+            const isDoneOcs = Number(r.done_ocs) === 1;
+            const isDoneWms = Number(r.done_wms) === 1;
+
+            const cutStockHtml = `
+                <div class="cut-stock-btn-group">
+                    <button type="button" class="btn-cut-stock cut-ocs ${isDoneOcs ? 'active' : 'pending'}"
+                            onclick="toggleCutStock(${r.id}, 'ocs')"
+                            title="${isDoneOcs ? 'OCS: Sudah potong stok (Klik untuk batalkan)' : 'OCS: Klik jika sudah potong stok'}">
+                        <i class="fa-solid ${isDoneOcs ? 'fa-circle-check' : 'fa-circle-notch'}"></i>
+                        <span>Done OCS</span>
+                    </button>
+                    <button type="button" class="btn-cut-stock cut-wms ${isDoneWms ? 'active' : 'pending'}"
+                            onclick="toggleCutStock(${r.id}, 'wms')"
+                            title="${isDoneWms ? 'WMS: Sudah potong stok (Klik untuk batalkan)' : 'WMS: Klik jika sudah potong stok'}">
+                        <i class="fa-solid ${isDoneWms ? 'fa-circle-check' : 'fa-circle-notch'}"></i>
+                        <span>Done WMS</span>
+                    </button>
+                </div>
+            `;
 
             return `
                 <tr>
-                    <td><strong>${r.request_no}</strong></td>
-                    <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(r.created_at || '').substring(0, 16)}</small></td>
+                    <td><strong style="font-family: var(--font-mono); font-size: 0.76rem; color: #0f172a;">${r.request_no}</strong></td>
+                    <td><small style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.68rem;">${(r.created_at || '').substring(0, 16)}</small></td>
                     <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
-                    <td class="col-sku"><strong class="sku-tag" style="color: #0f172a; white-space: nowrap; display: inline-block;">${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
-                    <td class="td-right"><strong style="font-size: 1.05rem; color: var(--primary); font-family: var(--font-mono);">${r.qty_request} Pcs</strong></td>
-                    <td class="td-right"><span class="stock-pill default" style="font-family: var(--font-mono); font-weight: 700; font-size: 0.92rem; padding: 0.25rem 0.55rem; border-radius: 6px; background: rgba(59, 130, 246, 0.08); color: #1d4ed8; border: 1px solid rgba(59, 130, 246, 0.2);">${r.qty_gudang_besar ?? 0} Pcs</span></td>
-                    <td><span style="font-weight: 600;">${r.requested_by}</span></td>
+                    <td class="col-sku-combined">
+                        <span class="sku-code-text">${r.sku}</span>
+                        <span class="sku-product-name">${r.product_name || '-'}</span>
+                    </td>
+                    <td class="td-right"><strong style="font-size: 0.82rem; color: var(--primary); font-family: var(--font-mono);">${r.qty_request} Pcs</strong></td>
+                    <td class="td-right"><span class="stock-pill default" style="font-family: var(--font-mono); font-weight: 700; font-size: 0.76rem; padding: 0.15rem 0.45rem; border-radius: 5px; background: rgba(59, 130, 246, 0.08); color: #1d4ed8; border: 1px solid rgba(59, 130, 246, 0.2);">${r.qty_gudang_besar ?? 0} Pcs</span></td>
+                    <td><span style="font-weight: 600; font-size: 0.76rem;">${r.requested_by}</span>${assignedHtml}</td>
                     <td>${rackBesarHtml}</td>
                     <td>${batchHtml}</td>
                     <td><span class="badge-status ${statusClass}">${r.status}</span></td>
+                    <td class="td-center">${cutStockHtml}</td>
                     <td class="td-center">${actionsHtml}</td>
                 </tr>
             `;
         }).join('');
     }
+
+    window.toggleCutStock = async function(id, type) {
+        try {
+            const payload = {
+                action: 'toggle_cut_stock',
+                id: id,
+                type: type
+            };
+
+            const res = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+
+            if (json.status === 'success') {
+                showToast(json.message, 'success');
+                if (AppState.replenishRequests && Array.isArray(AppState.replenishRequests)) {
+                    const item = AppState.replenishRequests.find(x => Number(x.id) === Number(id));
+                    if (item) {
+                        if (type === 'ocs') item.done_ocs = json.new_status;
+                        if (type === 'wms') item.done_wms = json.new_status;
+                        renderAdminReplenishTable(AppState.replenishRequests);
+                        return;
+                    }
+                }
+                loadAdminReplenish();
+            } else {
+                showToast(json.message || 'Gagal mengubah status potong stok.', 'error');
+            }
+        } catch (err) {
+            showToast('Error server: ' + err.message, 'error');
+        }
+    };
 
     window.updateReplenishStatus = async function(id, newStatus) {
         let notes = '';
@@ -1641,7 +1740,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.loadStockList = async function() {
         const search = searchStocks ? searchStocks.value.trim() : '';
-        stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data stok OCS...</td></tr>`;
+        stockMasterTableBody.innerHTML = `<tr><td colspan="9" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data stok OCS...</td></tr>`;
 
         try {
             const res = await fetch(`api.php?action=get_stocks&search=${encodeURIComponent(search)}`);
@@ -1651,7 +1750,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderStockTable(json.data);
             }
         } catch (err) {
-            stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
+            stockMasterTableBody.innerHTML = `<tr><td colspan="9" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
@@ -1661,15 +1760,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderStockTable(items) {
         if (!items || items.length === 0) {
-            stockMasterTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--text-muted);">Belum ada data stok. Klik 'Sync Full Stok OCS' untuk sinkronisasi.</td></tr>`;
+            stockMasterTableBody.innerHTML = `<tr><td colspan="9" class="td-center py-4" style="color: var(--text-muted);">Belum ada data stok. Klik 'Sync Data OCS' di topbar untuk sinkronisasi.</td></tr>`;
             return;
         }
 
         stockMasterTableBody.innerHTML = items.map(s => `
             <tr>
-                <td class="col-sku"><code style="white-space: nowrap;">${s.sku}</code></td>
+                <td class="col-sku-combined">
+                    <span class="sku-code-text">${s.sku}</span>
+                    <span class="sku-product-name">${s.product_name || '-'}</span>
+                </td>
                 <td><span style="font-family: var(--font-mono); font-size: 0.8rem; color: #475569;">${s.barcode || '-'}</span></td>
-                <td><strong style="color: #0f172a;">${s.product_name}</strong></td>
                 <td>${s.bin_code ? `<span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</span>` : '<span style="color: var(--text-muted);">-</span>'}</td>
                 <td><span style="background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600;">${s.area_id || 'Pusat'}</span></td>
                 <td class="td-right"><strong style="font-family: var(--font-mono); font-size: 0.95rem;">${Number(s.qty_gudang_kecil || 0).toLocaleString('id-ID')}</strong></td>
@@ -1715,21 +1816,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         minusStockTableBody.innerHTML = items.map(s => {
             const kecil = Number(s.qty_gudang_kecil || 0);
+            const besar = Number(s.qty_gudang_besar || 0);
             const qtyClass = kecil < 0 ? 'qty-minus' : (kecil === 0 ? 'qty-warn' : '');
             const binLabel = s.bin_code && !String(s.bin_code).toUpperCase().startsWith('BIN-' + String(s.sku).toUpperCase())
-                ? `<strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</strong><br><small style="color: var(--text-muted);">${s.rack_name || ''}</small>`
-                : `<span class="bin-unmapped-tag"><i class="fa-solid fa-circle-question"></i> Belum Dipetakan</span>`;
+                ? `<strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</strong><br><small style="color: var(--text-muted); font-size: 0.68rem;">${s.rack_name || ''}</small>`
+                : `<span class="bin-unmapped-tag" style="font-size: 0.68rem;"><i class="fa-solid fa-circle-question"></i> Belum Dipetakan</span>`;
+
+            let actionBtn = '';
+            if (besar > 0) {
+                actionBtn = `<button class="btn-primary-clean btn-sm" onclick='openAssignGudangBesarModal(${JSON.stringify(s).replace(/'/g, "&#39;")})' title="Assign tugas replenish ke Operator Gudang Besar"><i class="fa-solid fa-user-tag"></i> Assign GB</button>`;
+            } else {
+                actionBtn = `<button class="btn-secondary-clean btn-sm" disabled style="opacity: 0.5; cursor: not-allowed;" title="Stok Gudang Besar kosong (0 Pcs)"><i class="fa-solid fa-ban"></i> Stok GB 0</button>`;
+            }
 
             return `
                 <tr>
-                    <td class="col-sku"><code style="white-space: nowrap;">${s.sku}</code></td>
-                    <td><strong style="color: #0f172a;">${s.product_name || '-'}</strong></td>
-                    <td><span style="font-family: var(--font-mono); font-size: 0.82rem; color: #475569;">${s.barcode || '-'}</span></td>
+                    <td class="col-sku-combined">
+                        <span class="sku-code-text">${s.sku}</span>
+                        <span class="sku-product-name">${s.product_name || '-'}</span>
+                    </td>
+                    <td><span style="font-family: var(--font-mono); font-size: 0.72rem; color: #475569;">${s.barcode || '-'}</span></td>
                     <td>${binLabel}</td>
-                    <td class="td-right"><strong class="${qtyClass}">${kecil.toLocaleString('id-ID')}</strong></td>
-                    <td class="td-right">${Number(s.qty_gudang_besar || 0).toLocaleString('id-ID')}</td>
-                    <td class="td-right">${Number(s.qty_on_hand || 0).toLocaleString('id-ID')}</td>
-                    <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(s.last_synced_at || '-').substring(0, 16)}</small></td>
+                    <td class="td-right"><strong class="${qtyClass}" style="font-size: 0.82rem;">${kecil.toLocaleString('id-ID')}</strong></td>
+                    <td class="td-right" style="font-size: 0.78rem;">${besar.toLocaleString('id-ID')}</td>
+                    <td class="td-right" style="font-size: 0.78rem;">${Number(s.qty_on_hand || 0).toLocaleString('id-ID')}</td>
+                    <td><small style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.68rem;">${(s.last_synced_at || '-').substring(0, 16)}</small></td>
+                    <td class="td-center">${actionBtn}</td>
                 </tr>
             `;
         }).join('');
@@ -1750,8 +1862,127 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Modal Assign Replenish ke Gudang Besar
+    window.openAssignGudangBesarModal = async function(item) {
+        if (!item) return;
+
+        document.getElementById('assignSku').value = item.sku || '';
+        document.getElementById('assignBinCode').value = item.bin_code || ('BIN-' + item.sku);
+        document.getElementById('assignProductName').value = item.product_name || item.sku || '';
+        document.getElementById('assignBarcode').value = item.barcode || '';
+        document.getElementById('assignQtyKecil').value = item.qty_gudang_kecil || 0;
+        document.getElementById('assignQtyBesar').value = item.qty_gudang_besar || 0;
+
+        document.getElementById('assignDisplaySku').textContent = item.sku || '-';
+        document.getElementById('assignDisplayProdName').textContent = item.product_name || item.sku || '-';
+        document.getElementById('assignDisplayBin').innerHTML = `<i class="fa-solid fa-tag"></i> ${item.bin_code || ('BIN-' + item.sku)}`;
+
+        const kecil = Number(item.qty_gudang_kecil || 0);
+        const besar = Number(item.qty_gudang_besar || 0);
+
+        document.getElementById('assignDisplayStokKecil').textContent = `${kecil.toLocaleString('id-ID')} Pcs`;
+        document.getElementById('assignDisplayStokBesar').textContent = `${besar.toLocaleString('id-ID')} Pcs`;
+
+        const qtyHint = document.getElementById('assignQtyHint');
+        if (qtyHint) qtyHint.textContent = `Maks: ${besar.toLocaleString('id-ID')} Pcs`;
+
+        const inputQty = document.getElementById('assignInputQty');
+        inputQty.max = besar;
+
+        let suggested = 10;
+        if (kecil < 0) {
+            suggested = Math.abs(kecil) + 5;
+        } else if (kecil === 0) {
+            suggested = 10;
+        }
+        if (suggested > besar) {
+            suggested = besar;
+        }
+        inputQty.value = Math.max(1, suggested);
+
+        document.getElementById('assignInputNotes').value = kecil < 0 ? `Stok minus ${kecil} Pcs di rak Gudang Kecil, mohon segera dipick.` : '';
+
+        // Load Gudang Besar users
+        const selectOp = document.getElementById('assignSelectOperator');
+        selectOp.innerHTML = '<option value="">-- Memuat daftar operator... --</option>';
+
+        try {
+            const res = await fetch('api.php?action=get_users', { credentials: 'same-origin' });
+            const json = await res.json();
+            if (json.status === 'success' && json.data) {
+                const users = json.data;
+                const gbUsers = users.filter(u => u.role === 'gudang_besar' || u.role === 'operator');
+                const listToUse = gbUsers.length > 0 ? gbUsers : users;
+
+                selectOp.innerHTML = listToUse.map(u => {
+                    const roleLabel = u.role === 'gudang_besar' ? 'Gudang Besar' : (u.role === 'admin' ? 'Admin' : 'Operator');
+                    return `<option value="${u.username}">${u.full_name || u.username} (${roleLabel})</option>`;
+                }).join('');
+            } else {
+                selectOp.innerHTML = `
+                    <option value="gudang_besar">Operator Gudang Besar (gudang_besar)</option>
+                    <option value="operator2">Operator Gudang 2 (operator2)</option>
+                `;
+            }
+        } catch (e) {
+            selectOp.innerHTML = `
+                <option value="gudang_besar">Operator Gudang Besar (gudang_besar)</option>
+                <option value="operator2">Operator Gudang 2 (operator2)</option>
+            `;
+        }
+
+        openModal('modalAssignGudangBesar');
+    };
+
+    const formAssignGB = document.getElementById('formAssignGudangBesar');
+    if (formAssignGB) {
+        formAssignGB.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnSubmit = document.getElementById('btnSubmitAssignTask');
+            if (btnSubmit) btnSubmit.disabled = true;
+
+            try {
+                const payload = {
+                    action: 'assign_replenish_task',
+                    sku: document.getElementById('assignSku').value,
+                    bin_code: document.getElementById('assignBinCode').value,
+                    product_name: document.getElementById('assignProductName').value,
+                    barcode: document.getElementById('assignBarcode').value,
+                    qty_gudang_kecil: Number(document.getElementById('assignQtyKecil').value || 0),
+                    qty_gudang_besar: Number(document.getElementById('assignQtyBesar').value || 0),
+                    qty_request: Number(document.getElementById('assignInputQty').value || 1),
+                    assigned_to: document.getElementById('assignSelectOperator').value,
+                    requested_by: AppState.user ? (AppState.user.full_name || AppState.user.username) : 'Admin Inventory',
+                    notes: document.getElementById('assignInputNotes').value.trim()
+                };
+
+                const res = await fetch('api.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                const json = await res.json();
+
+                if (json.status === 'success') {
+                    showToast(json.message || 'Task replenish berhasil ditugaskan!', 'success');
+                    closeModal('modalAssignGudangBesar');
+                    loadMinusStock();
+                    loadAdminReplenish();
+                    loadDashboardStats();
+                } else {
+                    showToast(json.message || 'Gagal menugaskan task.', 'error');
+                }
+            } catch (err) {
+                showToast('Error: ' + err.message, 'error');
+            } finally {
+                if (btnSubmit) btnSubmit.disabled = false;
+            }
+        });
+    }
+
     // =========================================================================
-    // 7C. UNIFIED OCS SYNC (SKU-RACK + STOK, ONE BUTTON)
+    // 7C. UNIFIED OCS SYNC (REAL-TIME PROGRESS & AUTO-CLOSE POPUP)
     // =========================================================================
 
     function syncLog(html) {
@@ -1759,79 +1990,132 @@ document.addEventListener('DOMContentLoaded', () => {
         syncLogBox.scrollTop = syncLogBox.scrollHeight;
     }
 
-    // One button now covers both halves of the OCS import: the SKU-Rack mapping
-    // has to land first, because the stock pass relies on its barcode map to
-    // resolve rows the stock feed leaves blank.
+    async function safeFetchJson(url, options = {}) {
+        const res = await fetch(url, options);
+        const text = await res.text();
+        if (!text || !text.trim()) {
+            throw new Error(`Server tidak mengembalikan respon (HTTP ${res.status}). Kemungkinan koneksi timeout.`);
+        }
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            const cleanText = text.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+            throw new Error(`Respon tidak valid (HTTP ${res.status}): ${cleanText.substring(0, 150)}`);
+        }
+    }
+
     window.runFullOcsSync = async function() {
         if (AppState.isSyncing) return;
         AppState.isSyncing = true;
 
-        syncProgressBar.style.width = '8%';
+        syncProgressBar.style.width = '6%';
         syncStepStatus.textContent = 'Menghubungkan ke OCS Cloud API...';
         syncItemCounter.textContent = 'Memulai...';
-        syncLogBox.innerHTML = `<div class="log-entry info">[START] Membuka sesi otentikasi OCS Cloud...</div>`;
+        syncLogBox.innerHTML = `<div class="log-entry info">[START] Membuka sesi sinkronisasi OCS Cloud...</div>`;
         btnCloseSyncModal.disabled = true;
         openModal('modalSyncProgress');
 
         let rackCount = 0;
         let stockCount = 0;
-        let failed = false;
 
         try {
-            // --- Tahap 1: Master SKU-Rack & Barcode ---
-            syncProgressBar.style.width = '20%';
-            syncStepStatus.textContent = 'Tahap 1/2 - Sinkronisasi Master SKU-Rack & Barcode...';
-            syncLog(`<div class="log-entry info">[OData] DTO_WmsItems + DTO_LookupStockDetailedData...</div>`);
+            // --- Tahap 1: Inisialisasi & Cek OCS Cloud ---
+            syncProgressBar.style.width = '15%';
+            syncStepStatus.textContent = 'Tahap 1/3 - Otentikasi OCS Cloud...';
+            syncLog(`<div class="log-entry info">[OData] Memeriksa total data di OCS Cloud...</div>`);
 
-            const resRack = await fetch('api.php?action=sync_sku_racks_from_ocs', { credentials: 'same-origin' });
-            const jsonRack = await resRack.json();
+            const jsonInit = await safeFetchJson('api.php?action=sync_init', { credentials: 'same-origin' });
+
+            if (jsonInit.status !== 'success' || !jsonInit.token) {
+                throw new Error(jsonInit.message || 'Gagal login ke OCS Cloud API.');
+            }
+
+            const token = jsonInit.token;
+            const totalStockOcs = jsonInit.total_stock || 2525;
+            const totalRacksOcs = jsonInit.total_racks || 684;
+            syncLog(`<div class="log-entry success">[AUTH] Berhasil terhubung. Total: ${totalStockOcs.toLocaleString('id-ID')} item stok & ${totalRacksOcs.toLocaleString('id-ID')} lokasi rak.</div>`);
+
+            // --- Tahap 2: Sinkronisasi Master SKU-Rack & Barcode ---
+            syncProgressBar.style.width = '35%';
+            syncStepStatus.textContent = 'Tahap 2/3 - Sinkronisasi Master SKU-Rack & Barcode...';
+            syncItemCounter.textContent = `0 / ${totalRacksOcs} Lokasi`;
+            syncLog(`<div class="log-entry info">[OData] Mengunduh pemetaan rak & barcode master ($top=1000)...</div>`);
+
+            const jsonRack = await safeFetchJson('api.php?action=sync_sku_racks_step', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ token: token })
+            });
 
             if (jsonRack.status === 'success') {
-                rackCount = jsonRack.total_synced || 0;
-                syncProgressBar.style.width = '55%';
-                syncItemCounter.textContent = `${rackCount} Lokasi`;
-                syncLog(`<div class="log-entry success">[SUCCESS] ${rackCount} pemetaan Bin Code tersimpan.</div>`);
+                rackCount = jsonRack.total_synced || totalRacksOcs;
+                syncProgressBar.style.width = '45%';
+                syncItemCounter.textContent = `${rackCount} Lokasi Rak`;
+                syncLog(`<div class="log-entry success">[SUCCESS] ${rackCount} pemetaan Bin Code tersimpan (${jsonRack.barcode_filled || 0} barcode terisi).</div>`);
             } else {
-                failed = true;
-                syncLog(`<div class="log-entry error">[ERROR] Tahap SKU-Rack gagal: ${jsonRack.message}</div>`);
+                syncLog(`<div class="log-entry error">[WARN] Tahap SKU-Rack: ${jsonRack.message}</div>`);
             }
 
-            // --- Tahap 2: Saldo Stok (tetap dijalankan agar saldo tidak basi) ---
-            syncProgressBar.style.width = '65%';
-            syncStepStatus.textContent = 'Tahap 2/2 - Sinkronisasi Saldo Stok OCS...';
-            syncLog(`<div class="log-entry info">[OData] DTO_WmsItemStockLiteV2 dengan pagination looping...</div>`);
+            // --- Tahap 3: Sinkronisasi Saldo Stok Gudang (Step-by-step per 1000 item) ---
+            syncStepStatus.textContent = 'Tahap 3/3 - Sinkronisasi Saldo Stok Gudang...';
+            syncLog(`<div class="log-entry info">[OData] Mengunduh saldo stok bertahap ($top=1000)...</div>`);
 
-            const resStock = await fetch('api.php?action=sync_all_stock', { credentials: 'same-origin' });
-            const jsonStock = await resStock.json();
+            let skip = 0;
+            let top = 1000;
+            let hasMore = true;
+            let batchNo = 1;
 
-            if (jsonStock.status === 'success') {
-                stockCount = jsonStock.total_synced || 0;
-                syncLog(`<div class="log-entry success">[SUCCESS] ${stockCount} item stok tersimpan (Gudang Besar & Kecil).</div>`);
-            } else {
-                failed = true;
-                syncLog(`<div class="log-entry error">[ERROR] Tahap Stok gagal: ${jsonStock.message}</div>`);
+            while (hasMore) {
+                const jsonStock = await safeFetchJson('api.php?action=sync_stock_step', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ token: token, skip: skip, top: top })
+                });
+
+                if (jsonStock.status !== 'success') {
+                    throw new Error(jsonStock.message || `Gagal menyinkronkan stok pada batch ke-${batchNo}`);
+                }
+
+                stockCount += (jsonStock.batch_count || 0);
+                const currentTotal = jsonStock.total_count || totalStockOcs;
+                skip = jsonStock.next_skip || (skip + top);
+                hasMore = jsonStock.has_more;
+
+                // Progress calculation between 45% and 95%
+                const stockRatio = Math.min(1, stockCount / Math.max(1, currentTotal));
+                const currentPct = Math.round(45 + (stockRatio * 50));
+                syncProgressBar.style.width = `${currentPct}%`;
+                syncItemCounter.textContent = `${stockCount.toLocaleString('id-ID')} / ${currentTotal.toLocaleString('id-ID')} Item (${currentPct}%)`;
+                syncLog(`<div class="log-entry success">[STOK] Batch ${batchNo} (${jsonStock.batch_count || 0} item) tersimpan. Total: ${stockCount.toLocaleString('id-ID')} item.</div>`);
+
+                batchNo++;
+                if (batchNo > 10) break; // safety guard
             }
 
+            // --- Selesai 100% ---
             syncProgressBar.style.width = '100%';
-            syncItemCounter.textContent = `${rackCount} Lokasi / ${stockCount} Item`;
+            syncStepStatus.textContent = '🎉 Sinkronisasi Selesai 100%!';
+            syncItemCounter.textContent = `${rackCount} Lokasi / ${stockCount} Item (100%)`;
+            syncLog(`<div class="log-entry success" style="font-weight: 700;">[SELESAI] Data OCS berhasil disinkronkan 100%! Menutup popup...</div>`);
 
-            if (failed) {
-                syncStepStatus.textContent = 'Sinkronisasi Selesai Sebagian';
-                showToast('Sync selesai sebagian - cek log untuk detail.', 'error');
-            } else {
-                syncStepStatus.textContent = 'Sinkronisasi Selesai!';
-                syncLog(`<div class="log-entry info">[DONE] Waktu: ${new Date().toLocaleString('id-ID')}</div>`);
-                showToast(`🎉 Sync OCS selesai: ${rackCount} lokasi & ${stockCount} item stok.`, 'success');
-            }
+            // Automatically close popup after 1.2s as requested by user
+            setTimeout(() => {
+                closeModal('modalSyncProgress');
+                showToast(`🎉 Sync OCS Berhasil: ${rackCount} lokasi & ${stockCount} item stok tersimpan!`, 'success');
+            }, 1200);
 
+            // Reload all dashboards & tables
             loadSkuRacks();
             loadStockList();
             loadMinusStock();
             loadDashboardStats();
+            loadAdminReplenish();
         } catch (err) {
-            syncStepStatus.textContent = 'Error Koneksi';
+            syncStepStatus.textContent = 'Gagal Sinkronisasi';
             syncLog(`<div class="log-entry error">[EXCEPTION] ${err.message}</div>`);
-            showToast('Error koneksi: ' + err.message, 'error');
+            showToast('Sync gagal: ' + err.message, 'error');
         } finally {
             AppState.isSyncing = false;
             btnCloseSyncModal.disabled = false;

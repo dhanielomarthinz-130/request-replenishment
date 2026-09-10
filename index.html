@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=5.2.2">
+  <link rel="stylesheet" href="style.css?v=5.2.4">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -734,9 +734,9 @@
           </div>
           <div class="portal-titles">
             <div class="brand-name-row">
-              <h2>IEG OCS</h2>
+              <h2>IEG replenishment</h2>
             </div>
-            <span class="brand-subtitle">Omni Channel System</span>
+            <span class="brand-subtitle">Stock & Replenishment System</span>
           </div>
         </div>
 
@@ -807,6 +807,14 @@
           </div>
 
           <div class="topbar-actions ieg-topbar-actions">
+            <div class="topbar-sync-status" id="topbarSyncStatus" title="Waktu terakhir sinkronisasi data OCS">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              <div class="sync-status-text">
+                <span class="sync-label">Terakhir Sync:</span>
+                <span class="sync-time" id="topbarLastSyncTime">Memuat...</span>
+              </div>
+            </div>
+
             <button class="btn-topbar-action outline" onclick="runFullOcsSync()"
               title="Sync SKU-Rack + Stok OCS sekaligus">
               <i class="fa-solid fa-cloud-arrow-down"></i>
@@ -905,13 +913,6 @@
                 </div>
                 <h4>Stok Minus Gudang Kecil</h4>
               </div>
-
-              <div class="ieg-module-card" onclick="runFullOcsSync()">
-                <div class="module-icon-box">
-                  <i class="fa-solid fa-cloud-arrow-down"></i>
-                </div>
-                <h4>Sync Data OCS</h4>
-              </div>
             </div>
 
             <!-- Key Metric Cards -->
@@ -1001,7 +1002,7 @@
                       <tr>
                         <th>No. Request</th>
                         <th>Bin / Rak</th>
-                        <th class="col-sku">SKU & Produk</th>
+                        <th class="col-sku-combined">SKU &amp; Nama Produk</th>
                         <th>Qty Request</th>
                         <th>Operator</th>
                         <th>Status</th>
@@ -1059,11 +1060,6 @@
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
                   </button>
-                  <button class="btn-toolbar-btn outline" onclick="runFullOcsSync()"
-                    title="Sync SKU-Rack + Stok OCS sekaligus">
-                    <i class="fa-solid fa-cloud-arrow-down"></i>
-                    <span>Sync Data OCS</span>
-                  </button>
                   <button class="btn-toolbar-btn primary" onclick="openModalAddRack()">
                     <i class="fa-solid fa-plus"></i>
                     <span>Tambah Bin Code</span>
@@ -1075,8 +1071,7 @@
                 <table class="table-clean">
                   <thead>
                     <tr>
-                      <th class="col-sku">SKU Barang</th>
-                      <th>Nama Produk</th>
+                      <th class="col-sku-combined">SKU &amp; Nama Produk</th>
                       <th>Barcode</th>
                       <th>Kategori</th>
                       <th>Bin Code</th>
@@ -1087,7 +1082,7 @@
                   </thead>
                   <tbody id="skuRacksTableBody">
                     <tr>
-                      <td colspan="8" class="td-center">Memuat data master...</td>
+                      <td colspan="7" class="td-center">Memuat data master...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1131,19 +1126,20 @@
                       <th>No. Request</th>
                       <th>Waktu</th>
                       <th>Rak Gudang Kecil</th>
-                      <th class="col-sku">SKU & Nama Produk</th>
+                      <th class="col-sku-combined">SKU &amp; Nama Produk</th>
                       <th class="td-right">Qty Diajukan</th>
                       <th class="td-right">Qty Gudang Besar</th>
                       <th>Pemohon</th>
                       <th>Rak Gudang Besar</th>
                       <th>Batch Number</th>
                       <th>Status</th>
+                      <th class="td-center">Potong Stok</th>
                       <th class="td-center">Tindakan</th>
                     </tr>
                   </thead>
                   <tbody id="adminReplenishTableBody">
                     <tr>
-                      <td colspan="11" class="td-center">Memuat data permintaan...</td>
+                      <td colspan="12" class="td-center">Memuat data permintaan...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1170,10 +1166,6 @@
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
                   </button>
-                  <button class="btn-toolbar-btn primary" onclick="runFullOcsSync()">
-                    <i class="fa-solid fa-cloud-arrow-down"></i>
-                    <span>Sync Data OCS</span>
-                  </button>
                 </div>
               </div>
 
@@ -1181,9 +1173,8 @@
                 <table class="table-clean">
                   <thead>
                     <tr>
-                      <th class="col-sku">SKU</th>
+                      <th class="col-sku-combined">SKU &amp; Nama Produk</th>
                       <th>Barcode</th>
-                      <th>Nama Barang</th>
                       <th>Lokasi Bin / Rak</th>
                       <th>Area</th>
                       <th class="td-right">Gudang Kecil</th>
@@ -1195,7 +1186,7 @@
                   </thead>
                   <tbody id="stockMasterTableBody">
                     <tr>
-                      <td colspan="10" class="td-center">Memuat data stok...</td>
+                      <td colspan="9" class="td-center">Memuat data stok...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1251,10 +1242,6 @@
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
                   </button>
-                  <button class="btn-toolbar-btn primary" onclick="runFullOcsSync()">
-                    <i class="fa-solid fa-cloud-arrow-down"></i>
-                    <span>Sync Data OCS</span>
-                  </button>
                 </div>
               </div>
 
@@ -1262,14 +1249,14 @@
                 <table class="table-clean">
                   <thead>
                     <tr>
-                      <th class="col-sku">SKU</th>
-                      <th>Nama Produk</th>
+                      <th class="col-sku-combined">SKU &amp; Nama Produk</th>
                       <th>Barcode</th>
                       <th>Bin Code / Rak</th>
                       <th class="td-right">Gudang Kecil</th>
                       <th class="td-right">Gudang Besar</th>
                       <th class="td-right">On Hand</th>
                       <th>Update Terakhir</th>
+                      <th class="td-center">Aksi / Assign</th>
                     </tr>
                   </thead>
                   <tbody id="minusStockTableBody">
@@ -1359,6 +1346,87 @@
           onclick="closeModal('modalSyncProgress')" disabled>Tutup</button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: ASSIGN REPLENISH DARI STOK MINUS KE GUDANG BESAR -->
+  <!-- ========================================================================= -->
+  <div id="modalAssignGudangBesar" class="clean-modal-overlay">
+    <div class="form-modal-box" style="max-width: 520px;">
+      <div class="form-modal-header" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: #ffffff; padding: 1.15rem 1.45rem; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 0.65rem;">
+          <div style="width: 34px; height: 34px; border-radius: 9px; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; font-size: 1rem; color: #a5b4fc;">
+            <i class="fa-solid fa-user-tag"></i>
+          </div>
+          <div>
+            <h3 style="font-size: 0.95rem; font-weight: 800; color: #ffffff; margin: 0;">Assign ke Operator Gudang Besar</h3>
+            <p style="font-size: 0.72rem; color: #c7d2fe; margin: 0.1rem 0 0;">Tugaskan permintaan pengisian rak dari stok minus</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" style="color: #ffffff; font-size: 1.25rem; background: none; border: none; cursor: pointer;" onclick="closeModal('modalAssignGudangBesar')">&times;</button>
+      </div>
+
+      <form id="formAssignGudangBesar" class="form-modal-body" style="padding: 1.25rem 1.45rem; display: flex; flex-direction: column; gap: 0.95rem;">
+        <input type="hidden" id="assignSku">
+        <input type="hidden" id="assignBinCode">
+        <input type="hidden" id="assignProductName">
+        <input type="hidden" id="assignBarcode">
+        <input type="hidden" id="assignQtyKecil">
+        <input type="hidden" id="assignQtyBesar">
+
+        <!-- Info Preview Card -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.45rem;">
+            <div>
+              <span id="assignDisplaySku" style="font-family: var(--font-mono); font-weight: 800; font-size: 0.82rem; color: #0f172a;">SKU</span>
+              <p id="assignDisplayProdName" style="font-size: 0.76rem; color: #475569; margin-top: 0.15rem; line-height: 1.3;">Nama Produk</p>
+            </div>
+            <span id="assignDisplayBin" class="loc-bin-tag"><i class="fa-solid fa-tag"></i> RAK</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-top: 0.65rem; padding-top: 0.65rem; border-top: 1px dashed #cbd5e1;">
+            <div style="background: #ffffff; border: 1px solid #fee2e2; border-radius: 8px; padding: 0.45rem 0.65rem;">
+              <small style="display: block; font-size: 0.68rem; color: #dc2626; font-weight: 700;">Stok Gudang Kecil</small>
+              <strong id="assignDisplayStokKecil" style="font-family: var(--font-mono); font-size: 0.92rem; color: #b91c1c;">-5 Pcs</strong>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 0.45rem 0.65rem;">
+              <small style="display: block; font-size: 0.68rem; color: #4338ca; font-weight: 700;">Tersedia Gudang Besar</small>
+              <strong id="assignDisplayStokBesar" style="font-family: var(--font-mono); font-size: 0.92rem; color: #4338ca;">50 Pcs</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Gudang Besar User -->
+        <div class="field-item">
+          <label for="assignSelectOperator" style="font-size: 0.76rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem; display: block;">Pilih Operator Gudang Besar <span style="color: #dc2626;">*</span></label>
+          <select id="assignSelectOperator" style="width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.80rem; font-family: inherit;" required>
+            <option value="">-- Memuat daftar operator... --</option>
+          </select>
+        </div>
+
+        <!-- Quantity Request -->
+        <div class="field-item">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <label for="assignInputQty" style="font-size: 0.76rem; font-weight: 700; color: #334155;">Jumlah Diminta (Pcs) <span style="color: #dc2626;">*</span></label>
+            <span id="assignQtyHint" style="font-size: 0.70rem; color: #64748b;">Maks: 0 Pcs</span>
+          </div>
+          <input type="number" id="assignInputQty" style="width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.85rem; font-family: var(--font-mono); font-weight: 700;" min="1" required>
+        </div>
+
+        <!-- Notes -->
+        <div class="field-item">
+          <label for="assignInputNotes" style="font-size: 0.76rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem; display: block;">Catatan / Instruksi</label>
+          <input type="text" id="assignInputNotes" style="width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.78rem;" placeholder="Contoh: Stok minus di rak, tolong segera dipick">
+        </div>
+
+        <div class="form-modal-footer" style="display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 0.4rem; padding-top: 0.75rem; border-top: 1px solid #f1f5f9;">
+          <button type="button" class="btn-secondary-clean btn-sm" onclick="closeModal('modalAssignGudangBesar')">Batal</button>
+          <button type="submit" class="btn-primary-clean btn-sm" id="btnSubmitAssignTask" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);">
+            <i class="fa-solid fa-paper-plane"></i> Kirim &amp; Assign Task
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -1610,7 +1678,7 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=5.2.2"></script>
+  <script src="app.js?v=5.2.4"></script>
 </body>
 
 </html>

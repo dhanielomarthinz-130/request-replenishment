@@ -1829,24 +1829,25 @@ body {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
 }
 .table-clean th {
   background: #f8fafc;
   color: #475569;
   font-weight: 700;
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  padding: 0.95rem 1.35rem;
+  letter-spacing: 0.5px;
+  padding: 0.65rem 0.85rem;
   border-bottom: 1.5px solid #e2e8f0;
   white-space: nowrap;
 }
 .table-clean td {
-  padding: 1rem 1.35rem;
+  padding: 0.55rem 0.85rem;
   border-bottom: 1px solid #f1f5f9;
   color: #1e293b;
   vertical-align: middle;
+  font-size: 0.78rem;
 }
 .table-clean tbody tr {
   transition: background 0.15s ease;
@@ -1857,10 +1858,10 @@ body {
 .table-clean code {
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  padding: 0.2rem 0.45rem;
-  border-radius: 6px;
+  padding: 0.15rem 0.35rem;
+  border-radius: 5px;
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #0f172a;
   white-space: nowrap !important;
@@ -1873,26 +1874,40 @@ body {
 .loc-bin-tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   background: #312e81;
   color: #ffffff;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.70rem;
   font-weight: 700;
-  padding: 0.28rem 0.65rem;
-  border-radius: 7px;
-  letter-spacing: 0.3px;
-  box-shadow: 0 2px 6px rgba(49, 46, 129, 0.2);
+  padding: 0.18rem 0.45rem;
+  border-radius: 6px;
+  letter-spacing: 0.2px;
+  box-shadow: 0 1px 4px rgba(49, 46, 129, 0.15);
+}
+
+/* Assigned user pill badge */
+.assigned-user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(79, 70, 229, 0.08);
+  color: #4338ca;
+  border: 1px solid rgba(79, 70, 229, 0.2);
 }
 
 /* Status Badges */
 .badge-status {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.72rem;
+  gap: 0.3rem;
+  font-size: 0.66rem;
   font-weight: 800;
-  padding: 0.25rem 0.65rem;
+  padding: 0.18rem 0.45rem;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -1959,6 +1974,16 @@ body {
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #0f172a;
+}
+.btn-sm {
+  padding: 0.28rem 0.6rem !important;
+  font-size: 0.74rem !important;
+  border-radius: 6px !important;
+}
+.btn-xs {
+  padding: 0.2rem 0.48rem !important;
+  font-size: 0.70rem !important;
+  border-radius: 5px !important;
 }
 
 /* --- MONITORING GUDANG KECIL (LOW STOCK) --- */
@@ -4054,5 +4079,154 @@ body {
   cursor: pointer;
   pointer-events: none;
 }
+
+/* ==========================================================================
+   TOPBAR LAST SYNC TIME BADGE
+   ========================================================================== */
+.topbar-sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(241, 245, 249, 0.9);
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: #475569;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.topbar-sync-status:hover {
+  background: #ffffff;
+  border-color: #94a3b8;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.topbar-sync-status i {
+  color: #0284c7;
+  font-size: 0.82rem;
+}
+.topbar-sync-status .sync-status-text {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.topbar-sync-status .sync-label {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+.topbar-sync-status .sync-time {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   DONE OCS & DONE WMS CUT-STOCK BUTTONS
+   ========================================================================== */
+.cut-stock-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-content: center;
+}
+.btn-cut-stock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.52rem;
+  border-radius: 6px;
+  font-size: 0.71rem;
+  font-weight: 700;
+  font-family: var(--font-sans, inherit);
+  cursor: pointer;
+  transition: all 0.18s ease-in-out;
+  line-height: 1.2;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  user-select: none;
+}
+.btn-cut-stock:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* OCS Button States */
+.btn-cut-stock.cut-ocs.pending {
+  background: #f8fafc;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+.btn-cut-stock.cut-ocs.pending:hover {
+  background: #f1f5f9;
+  color: #059669;
+  border-color: #10b981;
+}
+.btn-cut-stock.cut-ocs.active {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.15);
+}
+.btn-cut-stock.cut-ocs.active:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+/* WMS Button States */
+.btn-cut-stock.cut-wms.pending {
+  background: #f8fafc;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+.btn-cut-stock.cut-wms.pending:hover {
+  background: #f1f5f9;
+  color: #4338ca;
+  border-color: #6366f1;
+}
+.btn-cut-stock.cut-wms.active {
+  background: #eef2ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.15);
+}
+.btn-cut-stock.cut-wms.active:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+
+/* ==========================================================================
+   COMBINED SKU & PRODUCT NAME CELL (WITH TEXT WRAP)
+   ========================================================================== */
+.col-sku-combined {
+  min-width: 220px;
+  max-width: 440px;
+  vertical-align: middle !important;
+  padding-top: 0.6rem !important;
+  padding-bottom: 0.6rem !important;
+}
+.sku-code-text {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+.sku-product-name {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.35;
+  display: block;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+}
+
+
 
 
