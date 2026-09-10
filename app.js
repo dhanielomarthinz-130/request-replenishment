@@ -247,7 +247,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const adminAvatarLetter = document.getElementById('adminAvatarLetter');
                 if (adminAvatarLetter) adminAvatarLetter.textContent = displayName.charAt(0).toUpperCase();
                 const adminUserRole = document.getElementById('adminUserRole');
-                if (adminUserRole) adminUserRole.textContent = '@' + (AppState.user.username || 'ADMIN').toUpperCase();
+                const roleLabel = AppState.user.role === 'superadmin' ? 'SUPERADMIN' : (AppState.user.username || 'ADMIN').toUpperCase();
+                if (adminUserRole) adminUserRole.textContent = '@' + roleLabel;
             }
             loadDashboardStats();
             loadSkuRacks();
@@ -260,9 +261,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function routeForUser(user, preferredTab) {
         AppState.user = user;
-        const effectiveWh = (user.work_location || user.role) === 'gudang_besar' ? 'gudang_besar' : (user.role === 'admin' ? 'admin' : 'gudang_kecil');
+        const isAdminRole = user.role === 'admin' || user.role === 'superadmin';
+        const effectiveWh = (user.work_location || user.role) === 'gudang_besar' ? 'gudang_besar' : (isAdminRole ? 'admin' : 'gudang_kecil');
 
-        if (user.role === 'admin') {
+        if (isAdminRole) {
             stopPickTaskAutoPolling();
             switchView('admin');
             const tab = preferredTab || AppState.activeAdminTab || 'tabDashboard';
@@ -1590,26 +1592,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         adminReplenishTableBody.innerHTML = items.map(r => {
             const statusClass = (r.status || 'PENDING').toLowerCase();
-            const isPending = r.status === 'PENDING';
-            const isApproved = r.status === 'APPROVED';
+            const isCancelled = r.status === 'CANCELLED';
+            const isCompleted = r.status === 'COMPLETED';
 
-            let actionsHtml = '';
+            let pickBtnHtml = '';
             if (isPending) {
-                actionsHtml = `
-                    <div style="display: flex; gap: 0.35rem; justify-content: center;">
-                        <button class="btn-primary-clean btn-sm" style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);" title="Pick Barang Gudang Besar" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Pick</button>
-                        <button class="btn-secondary-clean btn-sm" style="color: var(--danger);" title="Tolak Mutasi" onclick="updateReplenishStatus(${r.id}, 'REJECTED')"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
+                pickBtnHtml = `
+                    <button class="btn-primary-clean btn-sm" style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); padding: 0.3rem 0.55rem; font-size: 0.72rem;" title="Pick Barang Gudang Besar" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Pick</button>
+                    <button class="btn-secondary-clean btn-sm" style="padding: 0.3rem 0.5rem; font-size: 0.72rem; color: var(--danger);" title="Tolak Mutasi" onclick="updateReplenishStatus(${r.id}, 'REJECTED')"><i class="fa-solid fa-xmark"></i></button>
                 `;
             } else if (isApproved) {
-                actionsHtml = `
-                    <div style="display: flex; gap: 0.35rem; justify-content: center;">
-                        <button class="btn-primary-clean btn-sm" title="Selesaikan Mutasi Fisik" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Selesaikan</button>
-                    </div>
+                pickBtnHtml = `
+                    <button class="btn-primary-clean btn-sm" style="padding: 0.3rem 0.55rem; font-size: 0.72rem;" title="Selesaikan Mutasi Fisik" onclick='openPickModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fa-solid fa-dolly"></i> Selesaikan</button>
                 `;
-            } else {
-                actionsHtml = `<small style="color: var(--text-muted); font-weight: 600; font-size: 0.72rem;"><i class="fa-solid fa-check-double text-green"></i> Selesai</small>`;
             }
+
+            const actionsHtml = `
+                <div style="display: flex; gap: 0.25rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+                    ${pickBtnHtml}
+                    ${!isCompleted ? `
+                        <button class="btn-secondary-clean btn-sm" style="padding: 0.3rem 0.5rem; font-size: 0.72rem;" title="Edit Permintaan" onclick='openEditReplenishModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                    ` : ''}
+                    ${!isCancelled && !isCompleted ? `
+                        <button class="btn-secondary-clean btn-sm" style="padding: 0.3rem 0.5rem; font-size: 0.72rem; color: #ea580c;" title="Batalkan Permintaan" onclick="cancelReplenishRequest(${r.id}, '${r.request_no}')">
+                            <i class="fa-solid fa-ban"></i>
+                        </button>
+                    ` : ''}
+                    <button class="btn-secondary-clean btn-sm" style="padding: 0.3rem 0.5rem; font-size: 0.72rem; color: var(--danger);" title="Hapus Permintaan" onclick="deleteReplenishRequest(${r.id}, '${r.request_no}')">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            `;
 
             const rackBesarHtml = r.rack_gudang_besar 
                 ? `<span class="loc-bin-tag" style="background: rgba(234, 88, 12, 0.1); color: #c2410c; border: 1px solid rgba(234, 88, 12, 0.25);"><i class="fa-solid fa-warehouse"></i> ${r.rack_gudang_besar}</span>` 
@@ -1728,6 +1743,130 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadDashboardStats();
             } else {
                 showToast(json.message || 'Gagal mengubah status.', 'error');
+            }
+        } catch (err) {
+            showToast('Error server: ' + err.message, 'error');
+        }
+    };
+
+    window.openEditReplenishModal = function(r) {
+        if (!r) return;
+        document.getElementById('editReplenishId').value = r.id;
+        document.getElementById('editReplenishReqNo').textContent = r.request_no || 'REP-XXXX';
+        document.getElementById('editReplenishSku').textContent = r.sku || '-';
+        document.getElementById('editReplenishProdName').textContent = r.product_name || '-';
+        document.getElementById('editReplenishBin').value = r.bin_code || '-';
+
+        const maxBesar = Number(r.qty_gudang_besar || 0);
+        document.getElementById('editReplenishMaxBesar').value = `${maxBesar.toLocaleString('id-ID')} Pcs`;
+
+        const qtyInput = document.getElementById('editReplenishQty');
+        qtyInput.value = r.qty_request || 1;
+        if (maxBesar > 0) {
+            qtyInput.max = maxBesar;
+            document.getElementById('editReplenishQtyHint').textContent = `Maksimal: ${maxBesar.toLocaleString('id-ID')} Pcs (Stok Gudang Besar)`;
+        } else {
+            document.getElementById('editReplenishQtyHint').textContent = `Jumlah request`;
+        }
+
+        document.getElementById('editReplenishNotes').value = r.admin_notes || '';
+        openModal('modalEditReplenish');
+    };
+
+    window.submitEditReplenish = async function(event) {
+        event.preventDefault();
+        const id = document.getElementById('editReplenishId').value;
+        const qty = parseInt(document.getElementById('editReplenishQty').value, 10);
+        const notes = document.getElementById('editReplenishNotes').value.trim();
+        const btn = document.getElementById('btnSubmitEditReplenish');
+
+        if (!id || isNaN(qty) || qty <= 0) {
+            showToast('Qty Request harus lebih besar dari 0.', 'error');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...`;
+
+        try {
+            const res = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    action: 'edit_replenish_request',
+                    id: id,
+                    qty_request: qty,
+                    admin_notes: notes
+                })
+            });
+            const json = await res.json();
+            if (json.status === 'success') {
+                showToast(json.message, 'success');
+                closeModal('modalEditReplenish');
+                loadAdminReplenish();
+                loadDashboardStats();
+            } else {
+                showToast(json.message || 'Gagal mengubah permintaan.', 'error');
+            }
+        } catch (err) {
+            showToast('Error server: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Simpan Perubahan`;
+        }
+    };
+
+    window.cancelReplenishRequest = async function(id, reqNo) {
+        const reason = prompt(`Batalkan Permintaan Replenish #${reqNo}?\nMasukkan alasan pembatalan (opsional):`, 'Dibatalkan oleh Admin');
+        if (reason === null) return;
+
+        try {
+            const res = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    action: 'cancel_replenish_request',
+                    id: id,
+                    reason: reason.trim() || 'Dibatalkan oleh Admin'
+                })
+            });
+            const json = await res.json();
+            if (json.status === 'success') {
+                showToast(json.message, 'success');
+                loadAdminReplenish();
+                loadDashboardStats();
+            } else {
+                showToast(json.message || 'Gagal membatalkan permintaan.', 'error');
+            }
+        } catch (err) {
+            showToast('Error server: ' + err.message, 'error');
+        }
+    };
+
+    window.deleteReplenishRequest = async function(id, reqNo) {
+        if (!confirm(`HAPUS PERMANEN Permintaan Replenish #${reqNo}?\n\nData yang dihapus tidak dapat dikembalikan.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    action: 'delete_replenish_request',
+                    id: id
+                })
+            });
+            const json = await res.json();
+            if (json.status === 'success') {
+                showToast(json.message, 'success');
+                loadAdminReplenish();
+                loadDashboardStats();
+            } else {
+                showToast(json.message || 'Gagal menghapus permintaan.', 'error');
             }
         } catch (err) {
             showToast('Error server: ' + err.message, 'error');
@@ -2148,7 +2287,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         usersTableBody.innerHTML = items.map(u => {
             let roleBadge = '';
-            if (u.role === 'admin') {
+            if (u.role === 'superadmin') {
+                roleBadge = '<span class="badge-status" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff; border: none; font-weight: 700; box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);"><i class="fa-solid fa-crown"></i> Super Admin</span>';
+            } else if (u.role === 'admin') {
                 roleBadge = '<span class="badge-status approved"><i class="fa-solid fa-shield"></i> Administrator</span>';
             } else if (u.role === 'gudang_besar') {
                 roleBadge = '<span class="badge-status ready" style="background: rgba(234, 88, 12, 0.12); color: #c2410c; border: 1px solid rgba(234, 88, 12, 0.25);"><i class="fa-solid fa-warehouse"></i> Gudang Besar</span>';
@@ -2166,14 +2307,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${roleBadge}</td>
                     <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(u.created_at || '').substring(0, 10)}</small></td>
                     <td class="td-center">
-                        <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem;" onclick="openModalEditUser(${JSON.stringify(u).replace(/"/g, '&quot;')})">
-                            <i class="fa-solid fa-pen-to-square"></i> Edit
-                        </button>
+                        <div style="display: flex; gap: 0.35rem; justify-content: center;">
+                            <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem;" onclick="openModalEditUser(${JSON.stringify(u).replace(/"/g, '&quot;')})" title="Edit Pengguna">
+                                <i class="fa-solid fa-pen-to-square"></i> Edit
+                            </button>
+                            <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; color: var(--danger);" onclick="deleteUser(${u.id}, '${u.username}')" title="Hapus Pengguna">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
         }).join('');
     }
+
+    window.deleteUser = async function(id, username) {
+        if (!confirm(`Hapus akun pengguna '${username}'?`)) return;
+        try {
+            const res = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ action: 'delete_user', id: id })
+            });
+            const json = await res.json();
+            if (json.status === 'success') {
+                showToast(json.message, 'success');
+                loadUsers();
+            } else {
+                showToast(json.message || 'Gagal menghapus pengguna.', 'error');
+            }
+        } catch (err) {
+            showToast('Error: ' + err.message, 'error');
+        }
+    };
 
     window.openModalAddUser = function() {
         document.getElementById('modalUserTitle').textContent = 'Tambah Pengguna Baru';

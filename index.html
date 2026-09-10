@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=5.2.4">
+  <link rel="stylesheet" href="style.css?v=5.2.5">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -820,10 +820,6 @@
               <i class="fa-solid fa-cloud-arrow-down"></i>
               <span>Sync Data OCS</span>
             </button>
-            <button class="btn-topbar-action primary" onclick="openModalAddRack()">
-              <i class="fa-solid fa-plus"></i>
-              <span>Tambah Bin Code</span>
-            </button>
 
             <!-- Top Right Icons matching Screenshot 1 -->
             <div class="ieg-top-icons-group">
@@ -1060,10 +1056,6 @@
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
                   </button>
-                  <button class="btn-toolbar-btn primary" onclick="openModalAddRack()">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>Tambah Bin Code</span>
-                  </button>
                 </div>
               </div>
 
@@ -1109,6 +1101,9 @@
                   </button>
                   <button class="pill-filter" data-status="REJECTED">
                     <i class="fa-solid fa-ban"></i> Ditolak (Rejected)
+                  </button>
+                  <button class="pill-filter" data-status="CANCELLED">
+                    <i class="fa-solid fa-circle-xmark"></i> Dibatalkan (Cancelled)
                   </button>
                 </div>
                 <div class="toolbar-btns">
@@ -1515,9 +1510,10 @@
         <div class="field-item">
           <label for="userFormRole">Role / Hak Akses <span class="req">*</span></label>
           <select id="userFormRole" required>
+            <option value="superadmin">Super Admin (Akses Penuh)</option>
+            <option value="admin">Administrator Inventory (Panel Admin ERP)</option>
             <option value="gudang_kecil">Operator Gudang Kecil (Request Replenish)</option>
             <option value="gudang_besar">Operator Gudang Besar (Task Pick Barang)</option>
-            <option value="admin">Administrator Inventory (Panel Admin ERP)</option>
             <option value="operator">Operator Umum (Mobile PDA)</option>
           </select>
         </div>
@@ -1530,6 +1526,63 @@
         <div class="form-modal-footer">
           <button type="button" class="btn-secondary-clean" onclick="closeModal('modalUser')">Batal</button>
           <button type="submit" class="btn-primary-clean">Simpan User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: EDIT PERMINTAAN REPLENISH -->
+  <!-- ========================================================================= -->
+  <div id="modalEditReplenish" class="clean-modal-overlay">
+    <div class="form-modal-box">
+      <div class="form-modal-header">
+        <div>
+          <h3>Edit Permintaan Replenish</h3>
+          <p class="modal-subtext" id="editReplenishReqNo">REP-XXXXXXXX</p>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeModal('modalEditReplenish')">&times;</button>
+      </div>
+
+      <form id="formEditReplenish" class="form-modal-body" onsubmit="submitEditReplenish(event)">
+        <input type="hidden" id="editReplenishId" value="">
+
+        <div class="field-item">
+          <label>SKU &amp; Nama Barang</label>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem 0.75rem;">
+            <strong id="editReplenishSku" style="font-family: var(--font-mono); font-size: 0.85rem; display: block; color: #0f172a;">-</strong>
+            <span id="editReplenishProdName" style="font-size: 0.76rem; color: #64748b; display: block; margin-top: 0.15rem;">-</span>
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="field-item">
+            <label>Bin / Rak Gudang Kecil</label>
+            <input type="text" id="editReplenishBin" readonly style="background: #f8fafc; color: #334155;">
+          </div>
+          <div class="field-item">
+            <label>Stok Gudang Besar</label>
+            <input type="text" id="editReplenishMaxBesar" readonly style="background: #f8fafc; font-weight: 700; color: #10b981;">
+          </div>
+        </div>
+
+        <div class="field-item">
+          <label for="editReplenishQty">Jumlah Permintaan (Qty Request) <span class="req">*</span></label>
+          <input type="number" id="editReplenishQty" min="1" required>
+          <small class="field-hint" id="editReplenishQtyHint">Maksimal sesuai stok Gudang Besar</small>
+        </div>
+
+        <div class="field-item">
+          <label for="editReplenishNotes">Catatan Tambahan</label>
+          <input type="text" id="editReplenishNotes" placeholder="Catatan atau alasan pengubahan...">
+        </div>
+
+        <div class="form-modal-footer">
+          <button type="button" class="btn-secondary-clean" onclick="closeModal('modalEditReplenish')">Batal</button>
+          <button type="submit" id="btnSubmitEditReplenish" class="btn-primary-clean">
+            <i class="fa-solid fa-floppy-disk"></i> Simpan Perubahan
+          </button>
         </div>
       </form>
     </div>
@@ -1678,7 +1731,7 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=5.2.4"></script>
+  <script src="app.js?v=5.2.5"></script>
 </body>
 
 </html>

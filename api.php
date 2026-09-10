@@ -97,7 +97,7 @@ if (empty($_SESSION['username'])) {
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['full_name'] = $user['full_name'];
                 $loc = $verified['loc'] ?? $user['role'];
-                $_SESSION['role'] = ($user['role'] === 'admin') ? 'admin' : ($loc ?: $user['role']);
+                $_SESSION['role'] = (in_array($user['role'], ['admin', 'superadmin'])) ? $user['role'] : ($loc ?: $user['role']);
                 $_SESSION['work_location'] = $loc ?: $_SESSION['role'];
             }
         }
@@ -137,8 +137,8 @@ if ($action === 'login') {
         $_SESSION['full_name'] = $user['full_name'];
 
         // Determine effective role and work location
-        if ($user['role'] === 'admin') {
-            $_SESSION['role'] = 'admin';
+        if (in_array($user['role'], ['admin', 'superadmin'])) {
+            $_SESSION['role'] = $user['role'];
             $_SESSION['work_location'] = 'admin';
         } else {
             $effectiveLoc = in_array($warehouse, ['gudang_kecil', 'gudang_besar']) 
@@ -205,7 +205,7 @@ if ($action === 'switch_work_location') {
         jsonResp(['status' => 'error', 'message' => 'Sesi login tidak aktif.'], 401);
     }
 
-    if (($_SESSION['role'] ?? '') !== 'admin') {
+    if (!in_array($_SESSION['role'] ?? '', ['admin', 'superadmin'])) {
         $_SESSION['role'] = $targetLoc;
     }
     $_SESSION['work_location'] = $targetLoc;
@@ -420,7 +420,7 @@ if ($action === 'update_replenish_status') {
     $adminNotes = trim($input['admin_notes'] ?? '');
     $processedBy = trim($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Admin');
 
-    if (!$id || !in_array($newStatus, ['PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'])) {
+    if (!$id || !in_array($newStatus, ['PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED'])) {
         jsonResp(['status' => 'error', 'message' => 'Data status tidak valid.'], 400);
     }
 
@@ -450,6 +450,118 @@ if ($action === 'update_replenish_status') {
     jsonResp([
         'status' => 'success',
         'message' => "Permintaan #{$req['request_no']} berhasil diubah statusnya menjadi {$newStatus}."
+    ]);
+}
+
+if ($action === 'edit_replenish_request') {
+    $id = (int)($input['id'] ?? 0);
+    $qtyRequest = (int)($input['qty_request'] ?? 0);
+    $notes = trim($input['admin_notes'] ?? $input['notes'] ?? '');
+
+    if (!$id || $qtyRequest <= 0) {
+        jsonResp(['status' => 'error', 'message' => 'ID dan Qty Request harus lebih besar dari 0.'], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT * FROM replenish_requests WHERE id = ?");
+    $stmt->execute([$id]);
+    $req = $stmt->fetch();
+
+    if (!$req) {
+        jsonResp(['status' => 'error', 'message' => 'Permintaan replenish tidak ditemukan.'], 404);
+    }
+
+    if ($req['status'] === 'COMPLETED') {
+        jsonResp(['status' => 'error', 'message' => 'Permintaan yang sudah selesai (COMPLETED) tidak dapat diedit.'], 400);
+    }
+
+    // Check Gudang Besar capacity
+    $sku = $req['sku'];
+    $stmtStock = $pdo->prepare("SELECT qty_gudang_besar FROM stock_master WHERE UPPER(sku) = UPPER(?)");
+    $stmtStock->execute([$sku]);
+    $stock = $stmtStock->fetch();
+    $qtyBesar = $stock ? (int)$stock['qty_gudang_besar'] : (int)$req['qty_gudang_besar'];
+
+    if ($qtyRequest > $qtyBesar && $qtyBesar > 0) {
+        jsonResp(['status' => 'error', 'message' => "Qty request ({$qtyRequest} Pcs) melebihi stok Gudang Besar ({$qtyBesar} Pcs)."], 400);
+    }
+
+    $update = $pdo->prepare("UPDATE replenish_requests SET qty_request = ?, admin_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+    $update->execute([$qtyRequest, $notes, $id]);
+
+    jsonResp([
+        'status' => 'success',
+        'message' => "Permintaan #{$req['request_no']} berhasil diperbarui (Qty: {$qtyRequest} Pcs).",
+        'id' => $id,
+        'qty_request' => $qtyRequest,
+        'admin_notes' => $notes
+    ]);
+}
+
+if ($action === 'cancel_replenish_request') {
+    $id = (int)($input['id'] ?? 0);
+    $reason = trim($input['reason'] ?? $input['admin_notes'] ?? 'Dibatalkan oleh Admin');
+    $processedBy = trim($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Admin');
+
+    if (!$id) {
+        jsonResp(['status' => 'error', 'message' => 'ID permintaan tidak valid.'], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT * FROM replenish_requests WHERE id = ?");
+    $stmt->execute([$id]);
+    $req = $stmt->fetch();
+
+    if (!$req) {
+        jsonResp(['status' => 'error', 'message' => 'Permintaan replenish tidak ditemukan.'], 404);
+    }
+
+    if ($req['status'] === 'CANCELLED') {
+        jsonResp(['status' => 'error', 'message' => "Permintaan #{$req['request_no']} sudah dibatalkan sebelumnya."], 400);
+    }
+
+    // If request was completed, revert stock quantities locally
+    if ($req['status'] === 'COMPLETED') {
+        $sku = $req['sku'];
+        $qty = (int)($req['picked_qty'] ?? $req['qty_request']);
+        $pdo->prepare("UPDATE stock_master SET 
+            qty_gudang_kecil = CASE WHEN qty_gudang_kecil >= ? THEN qty_gudang_kecil - ? ELSE 0 END,
+            qty_gudang_besar = qty_gudang_besar + ?,
+            last_synced_at = CURRENT_TIMESTAMP
+            WHERE sku = ?")->execute([$qty, $qty, $qty, $sku]);
+    }
+
+    $cancelNote = !empty($req['admin_notes']) ? ($req['admin_notes'] . " | Cancel: " . $reason) : ("Cancel: " . $reason);
+    $update = $pdo->prepare("UPDATE replenish_requests SET status = 'CANCELLED', admin_notes = ?, processed_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+    $update->execute([$cancelNote, $processedBy, $id]);
+
+    jsonResp([
+        'status' => 'success',
+        'message' => "Permintaan #{$req['request_no']} berhasil DIBATALKAN.",
+        'id' => $id,
+        'new_status' => 'CANCELLED'
+    ]);
+}
+
+if ($action === 'delete_replenish_request') {
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) {
+        jsonResp(['status' => 'error', 'message' => 'ID permintaan tidak valid.'], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT id, request_no FROM replenish_requests WHERE id = ?");
+    $stmt->execute([$id]);
+    $req = $stmt->fetch();
+
+    if (!$req) {
+        jsonResp(['status' => 'error', 'message' => 'Permintaan replenish tidak ditemukan.'], 404);
+    }
+
+    $del = $pdo->prepare("DELETE FROM replenish_requests WHERE id = ?");
+    $del->execute([$id]);
+
+    jsonResp([
+        'status' => 'success',
+        'message' => "Permintaan #{$req['request_no']} berhasil dihapus.",
+        'id' => $id
     ]);
 }
 
@@ -1308,6 +1420,30 @@ if ($action === 'save_user') {
     }
 
     jsonResp(['status' => 'success', 'message' => $msg]);
+}
+
+if ($action === 'delete_user') {
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) {
+        jsonResp(['status' => 'error', 'message' => 'ID user tidak valid.'], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT id, username, role FROM users WHERE id = ?");
+    $stmt->execute([$id]);
+    $user = $stmt->fetch();
+
+    if (!$user) {
+        jsonResp(['status' => 'error', 'message' => 'User tidak ditemukan.'], 404);
+    }
+
+    if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === $id) {
+        jsonResp(['status' => 'error', 'message' => 'Tidak dapat menghapus akun yang sedang Anda gunakan.'], 400);
+    }
+
+    $del = $pdo->prepare("DELETE FROM users WHERE id = ?");
+    $del->execute([$id]);
+
+    jsonResp(['status' => 'success', 'message' => "Pengguna '{$user['username']}' berhasil dihapus."]);
 }
 
 // Default fallback

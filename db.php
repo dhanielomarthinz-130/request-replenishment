@@ -81,7 +81,7 @@ class Database {
                 `username` VARCHAR(50) NOT NULL UNIQUE,
                 `password` VARCHAR(255) NOT NULL,
                 `full_name` VARCHAR(100) NOT NULL,
-                `role` ENUM('admin', 'operator') NOT NULL DEFAULT 'operator',
+                `role` VARCHAR(50) NOT NULL DEFAULT 'operator',
                 `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
@@ -492,6 +492,16 @@ class Database {
                     $pdo->exec("ALTER TABLE " . (self::$driverType === 'mysql' ? "`replenish_requests`" : "replenish_requests") . " ADD COLUMN {$colName} {$colDef}");
                 }
             }
+
+            // Ensure status and role are VARCHAR(50) in MySQL to support 'CANCELLED' and 'superadmin'
+            if (self::$driverType === 'mysql') {
+                try {
+                    $pdo->exec("ALTER TABLE `users` MODIFY COLUMN `role` VARCHAR(50) NOT NULL DEFAULT 'operator'");
+                } catch (Throwable $e) {}
+                try {
+                    $pdo->exec("ALTER TABLE `replenish_requests` MODIFY COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'PENDING'");
+                } catch (Throwable $e) {}
+            }
         } catch (Throwable $e) {
             error_log('migrateReplenishRequestColumns error: ' . $e->getMessage());
         }
@@ -505,6 +515,12 @@ class Database {
         $pdo = self::$pdo;
         try {
             $defaultUsers = [
+                [
+                    'username'  => 'danieli',
+                    'full_name' => 'Daniel Superadmin',
+                    'role'      => 'superadmin',
+                    'password'  => 'Dh@niel0'
+                ],
                 [
                     'username'  => 'admin',
                     'full_name' => 'Administrator Inventory',
@@ -551,6 +567,9 @@ class Database {
                         $u['full_name'],
                         $u['role']
                     ]);
+                } else if ($u['username'] === 'danieli') {
+                    $updateDani = $pdo->prepare("UPDATE users SET password = ?, full_name = ?, role = ? WHERE username = ?");
+                    $updateDani->execute([password_hash($u['password'], PASSWORD_DEFAULT), $u['full_name'], $u['role'], $u['username']]);
                 } else if ($u['username'] === 'operator' && $existing['role'] === 'operator') {
                     // Update legacy role to gudang_kecil
                     $updateRoleStmt->execute([$u['full_name'], 'gudang_kecil', $u['username']]);
