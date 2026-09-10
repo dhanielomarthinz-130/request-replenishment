@@ -2070,31 +2070,50 @@ document.addEventListener('DOMContentLoaded', () => {
         minusStockTableBody.innerHTML = items.map(s => {
             const kecil = Number(s.qty_gudang_kecil || 0);
             const besar = Number(s.qty_gudang_besar || 0);
+            const canAssign = besar > 0;
             const qtyClass = kecil < 0 ? 'qty-minus' : (kecil === 0 ? 'qty-warn' : '');
             const binLabel = s.bin_code && !String(s.bin_code).toUpperCase().startsWith('BIN-' + String(s.sku).toUpperCase())
                 ? `<strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</strong><br><small style="color: var(--text-muted); font-size: 0.68rem;">${s.rack_name || ''}</small>`
                 : `<span class="bin-unmapped-tag" style="font-size: 0.68rem;"><i class="fa-solid fa-circle-question"></i> Belum Dipetakan</span>`;
 
-            const isChecked = AppState.selectedMinusSkus.has(s.sku);
+            // If item cannot be assigned, remove from selection if present
+            if (!canAssign && AppState.selectedMinusSkus.has(s.sku)) {
+                AppState.selectedMinusSkus.delete(s.sku);
+                AppState.selectedMinusItems.delete(s.sku);
+            }
+
+            const isChecked = canAssign && AppState.selectedMinusSkus.has(s.sku);
 
             const statusAssignHtml = s.active_assigned_to 
                 ? `<span class="assigned-user-pill" title="Ditugaskan ke ${s.active_assigned_to} (${s.active_request_no || ''})"><i class="fa-solid fa-user-check"></i> ${s.active_assigned_to}</span>` 
                 : `<span class="unassigned-pill" title="Belum ada penugasan replenish aktif"><i class="fa-solid fa-clock"></i> Belum</span>`;
 
             let actionBtn = '';
-            if (besar > 0) {
+            let checkboxCell = '';
+            if (canAssign) {
                 actionBtn = `<button class="btn-primary-clean btn-sm" onclick='openAssignGudangBesarModal(${JSON.stringify(s).replace(/'/g, "&#39;")})' title="Assign tugas replenish ke Operator Gudang Besar"><i class="fa-solid fa-user-tag"></i> Assign GB</button>`;
+                checkboxCell = `
+                    <input type="checkbox" class="tbl-checkbox check-minus-item" 
+                           data-sku="${s.sku}" 
+                           ${isChecked ? 'checked' : ''} 
+                           title="Pilih untuk assign ke Gudang Besar" 
+                           onchange='toggleSelectMinusItem(${JSON.stringify(s.sku)}, ${JSON.stringify(s).replace(/'/g, "&#39;")}, this.checked)'>
+                `;
             } else {
                 actionBtn = `<button class="btn-secondary-clean btn-sm" disabled style="opacity: 0.5; cursor: not-allowed;" title="Stok Gudang Besar kosong (0 Pcs)"><i class="fa-solid fa-ban"></i> Stok GB 0</button>`;
+                checkboxCell = `
+                    <input type="checkbox" class="tbl-checkbox check-minus-item" 
+                           data-sku="${s.sku}" 
+                           disabled 
+                           style="opacity: 0.25; cursor: not-allowed;" 
+                           title="Tidak dapat dipilih karena Stok Gudang Besar kosong (Stok GB 0)">
+                `;
             }
 
             return `
                 <tr class="${isChecked ? 'row-selected' : ''}">
                     <td class="td-center">
-                        <input type="checkbox" class="tbl-checkbox check-minus-item" 
-                               data-sku="${s.sku}" 
-                               ${isChecked ? 'checked' : ''} 
-                               onchange='toggleSelectMinusItem(${JSON.stringify(s.sku)}, ${JSON.stringify(s).replace(/'/g, "&#39;")}, this.checked)'>
+                        ${checkboxCell}
                     </td>
                     <td class="col-sku-combined">
                         <span class="sku-code-text">${s.sku}</span>
@@ -2112,19 +2131,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
-    // Batch Multi-Select for Stok Minus
+    // Batch Multi-Select for Stok Minus (Hanya SKU dengan Stok Gudang Besar > 0 / Assign GB)
     window.toggleSelectAllMinusStock = function(checked) {
         if (!AppState.minusStocks || AppState.minusStocks.length === 0) return;
         AppState.minusStocks.forEach(s => {
-            if (checked) {
-                AppState.selectedMinusSkus.add(s.sku);
-                AppState.selectedMinusItems.set(s.sku, s);
-            } else {
-                AppState.selectedMinusSkus.delete(s.sku);
-                AppState.selectedMinusItems.delete(s.sku);
+            const besar = Number(s.qty_gudang_besar || 0);
+            if (besar > 0) {
+                if (checked) {
+                    AppState.selectedMinusSkus.add(s.sku);
+                    AppState.selectedMinusItems.set(s.sku, s);
+                } else {
+                    AppState.selectedMinusSkus.delete(s.sku);
+                    AppState.selectedMinusItems.delete(s.sku);
+                }
             }
         });
-        document.querySelectorAll('.check-minus-item').forEach(cb => {
+        document.querySelectorAll('.check-minus-item:not(:disabled)').forEach(cb => {
             cb.checked = checked;
             const tr = cb.closest('tr');
             if (tr) tr.classList.toggle('row-selected', checked);
@@ -2133,6 +2155,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.toggleSelectMinusItem = function(sku, item, checked) {
+        const besar = Number(item.qty_gudang_besar || 0);
+        if (checked && besar <= 0) {
+            showToast('Hanya item dengan Stok Gudang Besar > 0 (Assign GB) yang dapat dipilih.', 'error');
+            const cb = document.querySelector(`.check-minus-item[data-sku="${sku}"]`);
+            if (cb) cb.checked = false;
+            return;
+        }
+
         if (checked) {
             AppState.selectedMinusSkus.add(sku);
             AppState.selectedMinusItems.set(sku, item);
@@ -2154,9 +2184,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = document.getElementById('minusSelectedCountText');
         if (text) text.textContent = `${count} SKU dipilih`;
         if (bar) bar.style.display = count > 0 ? 'flex' : 'none';
+
+        const assignableCount = (AppState.minusStocks || []).filter(s => Number(s.qty_gudang_besar || 0) > 0).length;
         const master = document.getElementById('checkAllMinusStock');
         if (master) {
-            master.checked = count > 0 && AppState.minusStocks && count === AppState.minusStocks.length;
+            master.checked = count > 0 && assignableCount > 0 && count === assignableCount;
+            master.indeterminate = count > 0 && count < assignableCount;
+            if (assignableCount === 0) {
+                master.disabled = true;
+                master.title = 'Tidak ada SKU dengan Stok Gudang Besar > 0 yang dapat dipilih';
+            } else {
+                master.disabled = false;
+                master.title = `Pilih semua ${assignableCount} SKU yang dapat di-assign ke Gudang Besar`;
+            }
         }
     };
 
@@ -2169,7 +2209,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tr) tr.classList.remove('row-selected');
         });
         const master = document.getElementById('checkAllMinusStock');
-        if (master) master.checked = false;
+        if (master) {
+            master.checked = false;
+            master.indeterminate = false;
+        }
         updateMinusSelectedCount();
     };
 

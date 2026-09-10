@@ -4360,6 +4360,14 @@ body {
   cursor: pointer;
   vertical-align: middle;
 }
+.tbl-checkbox:disabled {
+  opacity: 0.25 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1);
+}
+tr.row-selected {
+  background-color: rgba(79, 70, 229, 0.05) !important;
+}
 .assigned-user-pill {
   display: inline-flex;
   align-items: center;
