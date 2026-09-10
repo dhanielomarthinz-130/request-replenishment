@@ -1602,6 +1602,26 @@ if ($action === 'save_user') {
         $msg = "Pengguna '{$username}' berhasil ditambahkan.";
     }
 
+    // Sync to SQLite file as well if running on MySQL
+    try {
+        $sqlitePath = __DIR__ . '/ocs_inventory.sqlite';
+        if (file_exists($sqlitePath)) {
+            $sqlite = new PDO("sqlite:" . $sqlitePath);
+            if ($id > 0) {
+                if (!empty($password)) {
+                    $sUp = $sqlite->prepare("UPDATE users SET username = ?, full_name = ?, role = ?, password = ? WHERE username = ?");
+                    $sUp->execute([$username, $fullName, $role, password_hash($password, PASSWORD_DEFAULT), $username]);
+                } else {
+                    $sUp = $sqlite->prepare("UPDATE users SET username = ?, full_name = ?, role = ? WHERE username = ?");
+                    $sUp->execute([$username, $fullName, $role, $username]);
+                }
+            } else {
+                $sIns = $sqlite->prepare("INSERT INTO users (username, full_name, role, password, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)");
+                $sIns->execute([$username, $fullName, $role, password_hash($password, PASSWORD_DEFAULT)]);
+            }
+        }
+    } catch (Throwable $e) {}
+
     jsonResp(['status' => 'success', 'message' => $msg]);
 }
 
@@ -1625,6 +1645,16 @@ if ($action === 'delete_user') {
 
     $del = $pdo->prepare("DELETE FROM users WHERE id = ?");
     $del->execute([$id]);
+
+    // Also delete from SQLite if exists
+    try {
+        $sqlitePath = __DIR__ . '/ocs_inventory.sqlite';
+        if (file_exists($sqlitePath)) {
+            $sqlite = new PDO("sqlite:" . $sqlitePath);
+            $sDel = $sqlite->prepare("DELETE FROM users WHERE username = ?");
+            $sDel->execute([$user['username']]);
+        }
+    } catch (Throwable $e) {}
 
     jsonResp(['status' => 'success', 'message' => "Pengguna '{$user['username']}' berhasil dihapus."]);
 }

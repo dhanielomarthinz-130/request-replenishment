@@ -2663,12 +2663,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${roleBadge}</td>
                     <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(u.created_at || '').substring(0, 10)}</small></td>
                     <td class="td-center">
-                        <div style="display: flex; gap: 0.35rem; justify-content: center;">
+                        <div style="display: flex; gap: 0.35rem; justify-content: center; align-items: center;">
                             <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem;" onclick="openModalEditUser(${JSON.stringify(u).replace(/"/g, '&quot;')})" title="Edit Pengguna">
                                 <i class="fa-solid fa-pen-to-square"></i> Edit
                             </button>
-                            <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; color: var(--danger);" onclick="deleteUser(${u.id}, '${u.username}')" title="Hapus Pengguna">
-                                <i class="fa-solid fa-trash-can"></i>
+                            <button class="btn-secondary-clean" style="padding: 0.35rem 0.65rem; color: #dc2626; background: rgba(239, 68, 68, 0.06); border-color: rgba(220, 38, 38, 0.25);" onclick="deleteUser(${u.id}, '${u.username}')" title="Hapus Pengguna">
+                                <i class="fa-solid fa-trash-can"></i> Hapus
                             </button>
                         </div>
                     </td>
@@ -2678,7 +2678,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.deleteUser = async function(id, username) {
-        if (!confirm(`Hapus akun pengguna '${username}'?`)) return;
+        if (AppState.user && (AppState.user.id == id || AppState.user.username === username)) {
+            showToast('Tidak dapat menghapus akun yang sedang Anda gunakan saat ini.', 'error');
+            return;
+        }
+
+        if (!confirm(`Apakah Anda yakin ingin menghapus akun pengguna '${username}'?\nTindakan ini tidak dapat dibatalkan.`)) return;
+
         try {
             const res = await fetch('api.php', {
                 method: 'POST',
@@ -2688,13 +2694,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const json = await res.json();
             if (json.status === 'success') {
-                showToast(json.message, 'success');
+                showToast(json.message || 'Pengguna berhasil dihapus.', 'success');
                 loadUsers();
             } else {
                 showToast(json.message || 'Gagal menghapus pengguna.', 'error');
             }
         } catch (err) {
-            showToast('Error: ' + err.message, 'error');
+            showToast('Error server: ' + err.message, 'error');
         }
     };
 

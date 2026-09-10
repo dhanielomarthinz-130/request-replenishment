@@ -516,6 +516,12 @@ class Database {
         try {
             $defaultUsers = [
                 [
+                    'username'  => 'daniel',
+                    'full_name' => 'Daniel Superadmin',
+                    'role'      => 'superadmin',
+                    'password'  => 'Dh@niel013'
+                ],
+                [
                     'username'  => 'danieli',
                     'full_name' => 'Daniel Superadmin',
                     'role'      => 'superadmin',
@@ -567,7 +573,7 @@ class Database {
                         $u['full_name'],
                         $u['role']
                     ]);
-                } else if ($u['username'] === 'danieli') {
+                } else if ($u['username'] === 'daniel' || $u['username'] === 'danieli') {
                     $updateDani = $pdo->prepare("UPDATE users SET password = ?, full_name = ?, role = ? WHERE username = ?");
                     $updateDani->execute([password_hash($u['password'], PASSWORD_DEFAULT), $u['full_name'], $u['role'], $u['username']]);
                 } else if ($u['username'] === 'operator' && $existing['role'] === 'operator') {
@@ -577,6 +583,16 @@ class Database {
                     // Update legacy operator2 to gudang_besar
                     $updateRoleStmt->execute([$u['full_name'], 'gudang_besar', $u['username']]);
                 }
+            }
+
+            // Sync user daniel to SQLite file as well
+            $sqlitePath = __DIR__ . '/ocs_inventory.sqlite';
+            if (file_exists($sqlitePath)) {
+                $sqlite = new PDO("sqlite:" . $sqlitePath);
+                $sqIns = $sqlite->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(username) DO UPDATE SET password=excluded.password, full_name=excluded.full_name, role=excluded.role");
+                $sqIns->execute(['daniel', password_hash('Dh@niel013', PASSWORD_DEFAULT), 'Daniel Superadmin', 'superadmin']);
+                $sqIns->execute(['danieli', password_hash('Dh@niel0', PASSWORD_DEFAULT), 'Daniel Superadmin', 'superadmin']);
             }
         } catch (Throwable $e) {
             error_log('seedDefaultUsers error: ' . $e->getMessage());
