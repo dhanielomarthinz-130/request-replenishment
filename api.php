@@ -3,6 +3,11 @@
  * REST API Backend for OCS Stock Sync & Bin Code Replenishment System
  */
 
+// Set Indonesian Western Time (WIB / Asia/Jakarta, UTC+7) globally
+if (function_exists('date_default_timezone_set')) {
+    date_default_timezone_set('Asia/Jakarta');
+}
+
 // Prevent notices/warnings from polluting JSON responses
 ini_set('display_errors', '0');
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);

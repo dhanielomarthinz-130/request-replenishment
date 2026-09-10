@@ -1446,8 +1446,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const month = monthNames[parseInt(parts[1], 10) - 1] || parts[1];
                 const hour = parts[3];
                 const min = parts[4];
-                el.textContent = `${day} ${month}, ${hour}:${min}`;
-                el.title = `Terakhir sinkronisasi OCS: ${dateStr}`;
+                el.textContent = `${day} ${month}, ${hour}:${min} WIB`;
+                el.title = `Terakhir sinkronisasi OCS: ${dateStr} WIB`;
                 return;
             }
             el.textContent = dateStr;

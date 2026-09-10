@@ -4,6 +4,11 @@
  * Supports MySQL PDO with automatic SQLite fallback for zero-friction setup.
  */
 
+// Set Indonesian Western Time (WIB / Asia/Jakarta, UTC+7) globally
+if (function_exists('date_default_timezone_set')) {
+    date_default_timezone_set('Asia/Jakarta');
+}
+
 class Database {
     private static ?PDO $pdo = null;
     private static string $driverType = 'mysql';
@@ -38,6 +43,7 @@ class Database {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_TIMEOUT => 5
             ]);
+            try { self::$pdo->exec("SET time_zone = '+07:00';"); } catch (Throwable $tzE) {}
             self::$driverType = 'mysql';
         } catch (Exception $eDirect) {
             // 2. If DB does not exist (e.g. fresh local XAMPP setup), try creating it
@@ -52,6 +58,7 @@ class Database {
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
                 ]);
+                try { self::$pdo->exec("SET time_zone = '+07:00';"); } catch (Throwable $tzE) {}
                 self::$driverType = 'mysql';
             } catch (Exception $eInit) {
                 // 3. Fallback to SQLite if MySQL is offline
