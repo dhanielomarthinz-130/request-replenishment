@@ -216,14 +216,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         opBadge.classList.remove('gudang-kecil');
                     }
                     if (badgeIcon) badgeIcon.className = 'fa-solid fa-warehouse';
-                    if (badgeLabel) badgeLabel.textContent = 'Gudang Besar (Main Storage)';
+                    if (badgeLabel) badgeLabel.textContent = 'Gudang Besar';
                 } else {
                     if (opBadge) {
                         opBadge.classList.add('gudang-kecil');
                         opBadge.classList.remove('gudang-besar');
                     }
                     if (badgeIcon) badgeIcon.className = 'fa-solid fa-box-open';
-                    if (badgeLabel) badgeLabel.textContent = 'Gudang Kecil (Picking Rack)';
+                    if (badgeLabel) badgeLabel.textContent = 'Gudang Kecil';
                 }
 
                 const opTag = document.getElementById('opProfileRoleTag');

@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=5.3.4">
+  <link rel="stylesheet" href="style.css?v=5.3.5">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -386,9 +386,6 @@
           </div>
         </div>
         <div class="nav-right-actions">
-          <button class="nav-icon-btn" onclick="openSwitchWarehouseModal()" title="Ganti Lokasi Kerja">
-            <i class="fa-solid fa-arrow-right-arrow-left"></i>
-          </button>
           <button class="nav-icon-btn" onclick="triggerOperatorSync()" title="Sync Ulang">
             <i class="fa-solid fa-rotate"></i>
           </button>
@@ -411,7 +408,6 @@
                 <i class="fa-solid fa-barcode"></i>
                 <span>Scan Bin Code / Lokasi Rak</span>
               </div>
-              <span class="live-pill"><span class="dot"></span> OCS Live</span>
             </div>
 
             <form id="formScanBin" class="scanner-input-bar">
@@ -533,12 +529,6 @@
               <div class="radar-ping"></div>
             </div>
             <h3>Siap Scan Bin Code</h3>
-            <p>Ketik atau scan barcode Bin/Rak pada kolom input di atas untuk sinkronisasi saldo stok Gudang Besar &
-              Kecil secara real-time.</p>
-            <div class="quick-tips-row">
-              <div class="tip-chip"><i class="fa-solid fa-bolt"></i> Live OCS Cloud</div>
-              <div class="tip-chip"><i class="fa-solid fa-shield-check"></i> Validasi Otomatis</div>
-            </div>
           </div>
 
           <!-- Riwayat Selesai Direplenish Hari Ini -->
@@ -1843,7 +1833,7 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=5.3.4"></script>
+  <script src="app.js?v=5.3.5"></script>
 </body>
 
 </html>
