@@ -786,7 +786,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <strong style="color: #0f172a; font-size: 0.88rem;">${req.sku}</strong>
                                         <span class="loc-bin-tag" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"><i class="fa-solid fa-tag"></i> ${req.bin_code}</span>
                                     </div>
-                                    <span class="badge-status completed" style="font-size: 0.7rem; padding: 0.2rem 0.55rem;"><i class="fa-solid fa-circle-check"></i> Selesai Dipick</span>
+                                    <span class="badge-status completed" style="font-size: 0.7rem; padding: 0.2rem 0.55rem;"><i class="fa-solid fa-circle-check"></i> Selesai Direplenish</span>
                                 </div>
                                 <div style="font-size: 0.78rem; color: #475569; margin-bottom: 0.45rem; font-weight: 500; line-height: 1.35;">
                                     ${req.product_name}
@@ -797,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <span><i class="fa-solid fa-barcode" style="color: #4f46e5;"></i> Batch: <strong style="color: #4338ca;">${batch}</strong></span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.4rem; font-size: 0.7rem; color: #94a3b8;">
-                                    <span><i class="fa-solid fa-user-check" style="color: #10b981;"></i> Di-pick: <strong>${req.picked_by || req.processed_by || 'Operator Gudang'}</strong></span>
+                                    <span><i class="fa-solid fa-user-check" style="color: #10b981;"></i> Oleh: <strong>${req.picked_by || req.processed_by || 'Operator Gudang'}</strong></span>
                                     <span><i class="fa-regular fa-clock"></i> ${timeStr} WIB</span>
                                 </div>
                             </div>
@@ -812,8 +812,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 historyContainer.innerHTML = `
                     <div class="empty-feed" style="text-align: center; padding: 1.5rem 1rem; color: #94a3b8;">
                         <i class="fa-solid fa-clipboard-check" style="font-size: 1.8rem; color: #cbd5e1; display: block; margin-bottom: 0.5rem;"></i>
-                        <strong style="color: #64748b; font-size: 0.85rem; display: block;">Belum ada request selesai dipick hari ini</strong>
-                        <span style="font-size: 0.75rem;">Request yang telah selesai dipick oleh Gudang Besar akan langsung tampil di sini.</span>
+                        <strong style="color: #64748b; font-size: 0.85rem; display: block;">Belum ada request selesai direplenish hari ini</strong>
+                        <span style="font-size: 0.75rem;">Request yang telah selesai direplenish oleh Gudang Besar akan langsung tampil di sini.</span>
                     </div>
                 `;
             }

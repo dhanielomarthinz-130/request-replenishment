@@ -323,14 +323,7 @@ class Database {
 
             $pdo->beginTransaction();
 
-            // 1. Sync users dari SQLite ke MySQL
-            $uStmt = $sqlitePdo->query("SELECT username, password, full_name, role FROM users");
-            $uInsert = $pdo->prepare("INSERT IGNORE INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)");
-            while ($row = $uStmt->fetch()) {
-                $uInsert->execute([$row['username'], $row['password'], $row['full_name'], $row['role']]);
-            }
-
-            // 2. Sync sku_rack_locations (670+ baris rak)
+            // 1. Sync sku_rack_locations (670+ baris rak)
             $rStmt = $sqlitePdo->query("SELECT bin_code, rack_name, sku, barcode, product_name, category, notes FROM sku_rack_locations");
             $rInsert = $pdo->prepare("INSERT INTO sku_rack_locations (bin_code, rack_name, sku, barcode, product_name, category, notes) 
                 VALUES (?, ?, ?, ?, ?, ?, ?) 
@@ -514,18 +507,49 @@ class Database {
     {
         $pdo = self::$pdo;
         try {
+            // Check if initial users have already been seeded.
+            // If already seeded, NEVER re-insert deleted users!
+            $settingStmt = $pdo->query("SELECT key_value FROM system_settings WHERE key_name = 'default_users_seeded'");
+            $alreadySeeded = $settingStmt ? $settingStmt->fetchColumn() : false;
+
+            if ($alreadySeeded === '1') {
+                // System already seeded. Do not resurrect any deleted users.
+                // Just verify if user 'daniel' exists; if not, create him.
+                $dStmt = $pdo->prepare("SELECT id FROM users WHERE username = 'daniel'");
+                $dStmt->execute();
+                if (!$dStmt->fetch()) {
+                    $ins = $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)");
+                    $ins->execute(['daniel', password_hash('Dh@niel013', PASSWORD_DEFAULT), 'Daniel Superadmin', 'superadmin']);
+                }
+                return;
+            }
+
+            // Check if table already has users
+            $userCount = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+            if ($userCount > 0) {
+                // Table already has users: ensure daniel exists, then mark as seeded
+                $dStmt = $pdo->prepare("SELECT id FROM users WHERE username = 'daniel'");
+                $dStmt->execute();
+                if (!$dStmt->fetch()) {
+                    $ins = $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)");
+                    $ins->execute(['daniel', password_hash('Dh@niel013', PASSWORD_DEFAULT), 'Daniel Superadmin', 'superadmin']);
+                }
+
+                if (self::$driverType === 'mysql') {
+                    $pdo->exec("INSERT INTO system_settings (key_name, key_value) VALUES ('default_users_seeded', '1') ON DUPLICATE KEY UPDATE key_value = '1'");
+                } else {
+                    $pdo->exec("INSERT OR REPLACE INTO system_settings (key_name, key_value) VALUES ('default_users_seeded', '1')");
+                }
+                return;
+            }
+
+            // Fresh database: seed defaults
             $defaultUsers = [
                 [
                     'username'  => 'daniel',
                     'full_name' => 'Daniel Superadmin',
                     'role'      => 'superadmin',
                     'password'  => 'Dh@niel013'
-                ],
-                [
-                    'username'  => 'danieli',
-                    'full_name' => 'Daniel Superadmin',
-                    'role'      => 'superadmin',
-                    'password'  => 'Dh@niel0'
                 ],
                 [
                     'username'  => 'admin',
@@ -545,54 +569,23 @@ class Database {
                     'role'      => 'gudang_besar',
                     'password'  => 'operator123'
                 ],
-                [
-                    'username'  => 'operator',
-                    'full_name' => 'Operator Gudang 1',
-                    'role'      => 'gudang_kecil',
-                    'password'  => 'operator123'
-                ],
-                [
-                    'username'  => 'operator2',
-                    'full_name' => 'Operator Gudang 2',
-                    'role'      => 'gudang_besar',
-                    'password'  => 'operator123'
-                ],
             ];
 
-            $checkStmt = $pdo->prepare("SELECT id, role FROM users WHERE username = ?");
             $insertStmt = $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)");
-            $updateRoleStmt = $pdo->prepare("UPDATE users SET full_name = ?, role = ? WHERE username = ?");
-
             foreach ($defaultUsers as $u) {
-                $checkStmt->execute([$u['username']]);
-                $existing = $checkStmt->fetch();
-                if (!$existing) {
-                    $insertStmt->execute([
-                        $u['username'],
-                        password_hash($u['password'], PASSWORD_DEFAULT),
-                        $u['full_name'],
-                        $u['role']
-                    ]);
-                } else if ($u['username'] === 'daniel' || $u['username'] === 'danieli') {
-                    $updateDani = $pdo->prepare("UPDATE users SET password = ?, full_name = ?, role = ? WHERE username = ?");
-                    $updateDani->execute([password_hash($u['password'], PASSWORD_DEFAULT), $u['full_name'], $u['role'], $u['username']]);
-                } else if ($u['username'] === 'operator' && $existing['role'] === 'operator') {
-                    // Update legacy role to gudang_kecil
-                    $updateRoleStmt->execute([$u['full_name'], 'gudang_kecil', $u['username']]);
-                } else if ($u['username'] === 'operator2' && $existing['role'] === 'operator') {
-                    // Update legacy operator2 to gudang_besar
-                    $updateRoleStmt->execute([$u['full_name'], 'gudang_besar', $u['username']]);
-                }
+                $insertStmt->execute([
+                    $u['username'],
+                    password_hash($u['password'], PASSWORD_DEFAULT),
+                    $u['full_name'],
+                    $u['role']
+                ]);
             }
 
-            // Sync user daniel to SQLite file as well
-            $sqlitePath = __DIR__ . '/ocs_inventory.sqlite';
-            if (file_exists($sqlitePath)) {
-                $sqlite = new PDO("sqlite:" . $sqlitePath);
-                $sqIns = $sqlite->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)
-                    ON CONFLICT(username) DO UPDATE SET password=excluded.password, full_name=excluded.full_name, role=excluded.role");
-                $sqIns->execute(['daniel', password_hash('Dh@niel013', PASSWORD_DEFAULT), 'Daniel Superadmin', 'superadmin']);
-                $sqIns->execute(['danieli', password_hash('Dh@niel0', PASSWORD_DEFAULT), 'Daniel Superadmin', 'superadmin']);
+            // Mark as seeded
+            if (self::$driverType === 'mysql') {
+                $pdo->exec("INSERT INTO system_settings (key_name, key_value) VALUES ('default_users_seeded', '1') ON DUPLICATE KEY UPDATE key_value = '1'");
+            } else {
+                $pdo->exec("INSERT OR REPLACE INTO system_settings (key_name, key_value) VALUES ('default_users_seeded', '1')");
             }
         } catch (Throwable $e) {
             error_log('seedDefaultUsers error: ' . $e->getMessage());
