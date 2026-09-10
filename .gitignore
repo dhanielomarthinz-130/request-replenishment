@@ -3,6 +3,10 @@
 *.db
 *.log
 
+# Database aplikasi sengaja diikutkan agar ikut ter-deploy ke InfinityFree.
+# CATATAN: setiap push akan MENIMPA database di server dengan salinan lokal ini.
+!ocs_inventory.sqlite
+
 # OS generated files
 .DS_Store
 Thumbs.db
