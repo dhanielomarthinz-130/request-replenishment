@@ -20,6 +20,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Siapkan Konfigurasi Database InfinityFree (config.php)
+        if: ${{ secrets.DB_HOST != '' }}
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+        run: |
+          php -r '
+            $config = "<?php\n"
+                    . "define(\"DB_HOST\", " . var_export(getenv("DB_HOST"), true) . ");\n"
+                    . "define(\"DB_USER\", " . var_export(getenv("DB_USER"), true) . ");\n"
+                    . "define(\"DB_PASS\", " . var_export(getenv("DB_PASS"), true) . ");\n"
+                    . "define(\"DB_NAME\", " . var_export(getenv("DB_NAME"), true) . ");\n"
+                    . "define(\"DB_PORT\", \"3306\");\n";
+            file_put_contents("config.php", $config);
+          '
+
       - name: Sync ke InfinityFree
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -38,3 +56,9 @@ jobs:
             **/.github/**
             **/README.md
             **/Code.gs
+
+      - name: Trigger Update Database di InfinityFree
+        if: ${{ secrets.APP_URL != '' }}
+        run: |
+          echo "Memanggil endpoint InfinityFree untuk memicu auto-update database..."
+          curl -s -L --max-time 30 "${{ secrets.APP_URL }}/check.php" || true

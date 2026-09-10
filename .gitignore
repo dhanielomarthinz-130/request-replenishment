@@ -2,6 +2,7 @@
 *.sqlite
 *.db
 *.log
+config.php
 
 # Database aplikasi sengaja diikutkan agar ikut ter-deploy ke InfinityFree.
 # CATATAN: setiap push akan MENIMPA database di server dengan salinan lokal ini.
