@@ -114,6 +114,11 @@ if (!empty($_SESSION['user_id'])) {
     ]);
 }
 
+// Release session lock for non-session-writing actions so parallel requests run concurrently
+if (!in_array($action, ['login', 'switch_location', 'logout'])) {
+    session_write_close();
+}
+
 // ==============================================================================
 // 1. AUTHENTICATION & SESSION
 // ==============================================================================
@@ -1072,7 +1077,7 @@ if ($action === 'get_stocks') {
                    s.qty_gudang_kecil, s.qty_gudang_besar, s.is_active, s.last_synced_at,
                    MAX(r.bin_code) as bin_code, MAX(r.rack_name) as rack_name
             FROM stock_master s
-            LEFT JOIN sku_rack_locations r ON UPPER(s.sku) = UPPER(r.sku)";
+            LEFT JOIN sku_rack_locations r ON s.sku = r.sku";
     $params = [];
 
     if (!empty($search)) {
@@ -1104,8 +1109,8 @@ if ($action === 'get_negative_stocks') {
                    MAX(CASE WHEN req.status IN ('PENDING', 'APPROVED') AND req.assigned_to IS NOT NULL AND req.assigned_to != '' THEN req.assigned_to ELSE NULL END) as active_assigned_to,
                    MAX(CASE WHEN req.status IN ('PENDING', 'APPROVED') AND req.assigned_to IS NOT NULL AND req.assigned_to != '' THEN req.request_no ELSE NULL END) as active_request_no
             FROM stock_master s
-            LEFT JOIN sku_rack_locations r ON UPPER(s.sku) = UPPER(r.sku)
-            LEFT JOIN replenish_requests req ON UPPER(s.sku) = UPPER(req.sku) AND req.status IN ('PENDING', 'APPROVED')
+            LEFT JOIN sku_rack_locations r ON s.sku = r.sku
+            LEFT JOIN replenish_requests req ON s.sku = req.sku AND req.status IN ('PENDING', 'APPROVED')
             WHERE s.qty_gudang_kecil <= ?";
     $params = [$threshold];
 
@@ -1544,6 +1549,19 @@ if ($action === 'get_dashboard_stats') {
 
     $lastSync = getLastOcsSync($pdo);
 
+    // Recent 5 replenish requests for quick dashboard display
+    $stmtRecent = $pdo->query("SELECT * FROM replenish_requests ORDER BY id DESC LIMIT 5");
+    $recentReplenish = $stmtRecent->fetchAll();
+
+    // Top 5 low stock items in Gudang Kecil
+    $stmtLow = $pdo->query("SELECT s.sku, s.product_name, s.qty_gudang_kecil, s.qty_gudang_besar,
+                                   COALESCE(NULLIF(s.barcode, ''), '-') as barcode,
+                                   (SELECT bin_code FROM sku_rack_locations r WHERE r.sku = s.sku LIMIT 1) as bin_code
+                            FROM stock_master s 
+                            WHERE s.qty_gudang_kecil <= 15 
+                            ORDER BY s.qty_gudang_kecil ASC, s.sku ASC LIMIT 5");
+    $lowStocks = $stmtLow->fetchAll();
+
     jsonResp([
         'status' => 'success',
         'data' => [
@@ -1554,7 +1572,9 @@ if ($action === 'get_dashboard_stats') {
             'low_stock_count' => $lowStockCount,
             'minus_stock_count' => $minusStockCount,
             'empty_stock_count' => $emptyStockCount,
-            'last_synced_at' => $lastSync
+            'last_synced_at' => $lastSync,
+            'recent_replenish' => $recentReplenish,
+            'low_stocks' => $lowStocks
         ]
     ]);
 }

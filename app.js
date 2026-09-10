@@ -254,8 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const roleLabel = AppState.user.role === 'superadmin' ? 'SUPERADMIN' : (AppState.user.username || 'ADMIN').toUpperCase();
                 if (adminUserRole) adminUserRole.textContent = '@' + roleLabel;
             }
-            loadDashboardStats();
-            loadSkuRacks();
         }
     }
 
@@ -1338,20 +1336,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (d.last_synced_at) {
                     updateTopbarLastSync(d.last_synced_at);
                 }
-            }
 
-            const resReq = await fetch('api.php?action=get_replenish_requests&limit=5');
-            const jsonReq = await resReq.json();
-            if (jsonReq.status === 'success') {
-                renderDashboardReplenish(jsonReq.data);
+                if (d.recent_replenish) {
+                    renderDashboardReplenish(d.recent_replenish);
+                }
+                if (d.low_stocks) {
+                    renderDashboardLowStock(d.low_stocks);
+                }
             }
-
-            const resStock = await fetch('api.php?action=get_stocks');
-            const jsonStock = await resStock.json();
-            if (jsonStock.status === 'success') {
-                renderDashboardLowStock(jsonStock.data);
-            }
-        } catch (err) {}
+        } catch (err) {
+            console.error('loadDashboardStats error:', err);
+        }
     }
 
     function renderDashboardReplenish(items) {

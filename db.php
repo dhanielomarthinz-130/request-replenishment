@@ -7,6 +7,7 @@
 class Database {
     private static ?PDO $pdo = null;
     private static string $driverType = 'mysql';
+    private static bool $isMigrated = false;
 
     public static function getConnection(): PDO {
         if (self::$pdo !== null) {
@@ -63,7 +64,10 @@ class Database {
             }
         }
 
-        self::migrateTables();
+        if (!self::$isMigrated) {
+            self::migrateTables();
+            self::$isMigrated = true;
+        }
         return self::$pdo;
     }
 
@@ -73,6 +77,17 @@ class Database {
 
     private static function migrateTables(): void {
         $pdo = self::$pdo;
+
+        $schemaVersion = '20260910_v2';
+        try {
+            $check = $pdo->prepare("SELECT key_value FROM system_settings WHERE key_name = 'db_schema_version'");
+            $check->execute();
+            if ($check->fetchColumn() === $schemaVersion) {
+                return;
+            }
+        } catch (Throwable $e) {
+            // First run or system_settings table not created yet
+        }
 
         if (self::$driverType === 'mysql') {
             // Table: users
@@ -279,6 +294,11 @@ class Database {
                 $insertStock->execute($s);
             }
         }
+
+        try {
+            $up = $pdo->prepare("INSERT INTO system_settings (key_name, key_value) VALUES ('db_schema_version', ?) ON DUPLICATE KEY UPDATE key_value = VALUES(key_value)");
+            $up->execute([$schemaVersion]);
+        } catch (Throwable $e) {}
     }
 
     /**
