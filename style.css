@@ -3628,3 +3628,399 @@ body {
   box-shadow: 0 4px 14px rgba(234, 88, 12, 0.3) !important;
 }
 
+/* ==========================================================================
+   WAREHOUSE SELECTION IN LOGIN SCREEN
+   ========================================================================== */
+.warehouse-select-section {
+  margin: 0.35rem 0 0.2rem;
+  text-align: left;
+}
+.warehouse-select-label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 0.45rem;
+  letter-spacing: 0.2px;
+}
+.warehouse-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+.warehouse-option-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.75rem 0.8rem;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+.warehouse-option-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.warehouse-option-card:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+.warehouse-option-card.active {
+  background: #ffffff;
+  border-color: #4f46e5;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.15);
+}
+.warehouse-option-card .card-radio-indicator {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.65rem;
+  font-size: 0.9rem;
+  color: #94a3b8;
+  transition: color 0.15s;
+}
+.warehouse-option-card.active .card-radio-indicator {
+  color: #4f46e5;
+}
+.warehouse-option-card .card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  margin-bottom: 0.45rem;
+  transition: transform 0.2s;
+}
+.warehouse-option-card:hover .card-icon {
+  transform: scale(1.08);
+}
+.warehouse-option-card .card-icon.kecil {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.warehouse-option-card .card-icon.besar {
+  background: #fff7ed;
+  color: #ea580c;
+}
+.warehouse-option-card.active .card-icon.kecil {
+  background: #2563eb;
+  color: #ffffff;
+}
+.warehouse-option-card.active .card-icon.besar {
+  background: #ea580c;
+  color: #ffffff;
+}
+.warehouse-option-card .card-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.warehouse-option-card .card-text strong {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+.warehouse-option-card .card-text span {
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+  line-height: 1.25;
+}
+
+/* ==========================================================================
+   OPERATOR HEADER BADGE & SWITCH BUTTON
+   ========================================================================== */
+.warehouse-badge.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.32rem 0.65rem;
+  border-radius: 9999px;
+}
+.warehouse-badge.clickable:hover {
+  transform: scale(1.03);
+  filter: brightness(1.08);
+}
+.warehouse-badge.clickable .switch-icon {
+  font-size: 0.68rem;
+  opacity: 0.75;
+  margin-left: 0.2rem;
+}
+.warehouse-badge.gudang-kecil {
+  background: rgba(37, 99, 235, 0.15) !important;
+  color: #1d4ed8 !important;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+.warehouse-badge.gudang-besar {
+  background: rgba(234, 88, 12, 0.15) !important;
+  color: #c2410c !important;
+  border: 1px solid rgba(234, 88, 12, 0.3);
+}
+
+/* ==========================================================================
+   LIVE SYNC STATUS & ARRIVAL BANNER
+   ========================================================================== */
+.live-sync-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 9px;
+  margin-bottom: 0.65rem;
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: #15803d;
+}
+.live-sync-indicator .pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  animation: pulse-green 2s infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.new-task-arrived-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.9rem;
+  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+  color: #ffffff;
+  border-radius: 12px;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(234, 88, 12, 0.35);
+  animation: slideDownPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes slideDownPop {
+  0% { transform: translateY(-12px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.new-task-arrived-banner .banner-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.new-task-arrived-banner .bell-ringing {
+  font-size: 1.25rem;
+  animation: bellShake 1.2s infinite;
+}
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0); }
+  20%, 60% { transform: rotate(15deg); }
+  40%, 80% { transform: rotate(-15deg); }
+}
+.new-task-arrived-banner .banner-texts {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.new-task-arrived-banner .banner-texts strong {
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+.new-task-arrived-banner .banner-texts span {
+  font-size: 0.72rem;
+  opacity: 0.92;
+}
+.new-task-arrived-banner .banner-btn-action {
+  background: rgba(255, 255, 255, 0.25);
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.highlight-glow {
+  animation: cardHighlight 2.5s ease-out;
+}
+@keyframes cardHighlight {
+  0% { box-shadow: 0 0 0 4px #ea580c, 0 8px 24px rgba(234, 88, 12, 0.4); transform: scale(1.02); }
+  100% { box-shadow: none; transform: scale(1); }
+}
+
+.animate-bounce {
+  animation: bounceNav 0.6s infinite alternate;
+}
+@keyframes bounceNav {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.35); }
+}
+
+/* ==========================================================================
+   MODAL: SWITCH WAREHOUSE
+   ========================================================================== */
+.switch-wh-box {
+  max-width: 420px !important;
+}
+.switch-wh-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+}
+.switch-wh-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+}
+.switch-wh-card-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+.switch-wh-card-btn.active-wh {
+  border-color: #4f46e5;
+  background: #faf5ff;
+}
+.sw-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+.sw-icon-wrap.kecil {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.sw-icon-wrap.besar {
+  background: #fff7ed;
+  color: #ea580c;
+}
+.sw-text-wrap {
+  flex: 1;
+}
+.sw-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+.sw-title-row strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+.sw-badge-active {
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: #10b981;
+  color: #ffffff;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+.sw-text-wrap p {
+  font-size: 0.74rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.35;
+}
+.sw-arrow {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+/* ==========================================================================
+   PROFILE TAB WAREHOUSE BOX
+   ========================================================================== */
+.profile-warehouse-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  margin-top: 1rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+.profile-warehouse-box:hover {
+  border-color: #4f46e5;
+  background: #faf5ff;
+}
+.profile-warehouse-box .wh-box-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.profile-warehouse-box .wh-box-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.profile-warehouse-box .wh-box-details small {
+  font-size: 0.68rem;
+  color: #64748b;
+  font-weight: 600;
+}
+.profile-warehouse-box .wh-box-details strong {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+.profile-warehouse-box .wh-box-desc {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 0.1rem;
+}
+.profile-warehouse-box .btn-sm-wh-switch {
+  padding: 0.35rem 0.65rem;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  pointer-events: none;
+}
+
+

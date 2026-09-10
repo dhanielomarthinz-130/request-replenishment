@@ -36,12 +36,16 @@ $pdo = Database::getConnection();
 
 // Helper to generate a tamper-evident session token
 function generateSessionToken(array $user): string {
+    $loc = $user['work_location'] ?? $user['role'] ?? 'gudang_kecil';
+    $role = $user['role'] ?? 'operator';
     $payload = [
         'uid' => $user['id'],
         'u'   => $user['username'],
+        'r'   => $role,
+        'loc' => $loc,
         'exp' => time() + (12 * 60 * 60)
     ];
-    $payload['sig'] = hash_hmac('sha256', $payload['uid'] . '|' . $payload['u'] . '|' . $payload['exp'], 'ocs_auth_secret_2026');
+    $payload['sig'] = hash_hmac('sha256', $payload['uid'] . '|' . $payload['u'] . '|' . $payload['loc'] . '|' . $payload['exp'], 'ocs_auth_secret_2026');
     return base64_encode(json_encode($payload));
 }
 
@@ -52,7 +56,8 @@ function verifySessionToken(string $token): ?array {
     $data = json_decode($raw, true);
     if (!$data || !isset($data['uid'], $data['u'], $data['exp'], $data['sig'])) return null;
     if ($data['exp'] < time()) return null;
-    $expected = hash_hmac('sha256', $data['uid'] . '|' . $data['u'] . '|' . $data['exp'], 'ocs_auth_secret_2026');
+    $loc = $data['loc'] ?? '';
+    $expected = hash_hmac('sha256', $data['uid'] . '|' . $data['u'] . '|' . $loc . '|' . $data['exp'], 'ocs_auth_secret_2026');
     return hash_equals($expected, $data['sig']) ? $data : null;
 }
 
@@ -74,6 +79,27 @@ function getJsonInput(): array {
 $input = array_merge($_GET, $_POST, getJsonInput());
 $action = $input['action'] ?? $_GET['action'] ?? $_POST['action'] ?? '';
 
+// Auto restore session from session_token if session cookie is missing or new worker
+if (empty($_SESSION['username'])) {
+    $token = trim($input['session_token'] ?? $_SERVER['HTTP_X_SESSION_TOKEN'] ?? '');
+    if ($token) {
+        $verified = verifySessionToken($token);
+        if ($verified) {
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+            $stmt->execute([$verified['uid']]);
+            $user = $stmt->fetch();
+            if ($user) {
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['full_name'] = $user['full_name'];
+                $loc = $verified['loc'] ?? $user['role'];
+                $_SESSION['role'] = ($user['role'] === 'admin') ? 'admin' : ($loc ?: $user['role']);
+                $_SESSION['work_location'] = $loc ?: $_SESSION['role'];
+            }
+        }
+    }
+}
+
 // Slide session cookie expiry forward if already active
 if (!empty($_SESSION['user_id'])) {
     setcookie(session_name(), session_id(), [
@@ -91,6 +117,7 @@ if (!empty($_SESSION['user_id'])) {
 if ($action === 'login') {
     $username = trim($input['username'] ?? '');
     $password = trim($input['password'] ?? '');
+    $warehouse = trim($input['warehouse'] ?? $input['work_location'] ?? '');
 
     if (empty($username) || empty($password)) {
         jsonResp(['status' => 'error', 'message' => 'Username dan password wajib diisi.'], 400);
@@ -104,7 +131,18 @@ if ($action === 'login') {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['full_name'] = $user['full_name'];
-        $_SESSION['role'] = $user['role'];
+
+        // Determine effective role and work location
+        if ($user['role'] === 'admin') {
+            $_SESSION['role'] = 'admin';
+            $_SESSION['work_location'] = 'admin';
+        } else {
+            $effectiveLoc = in_array($warehouse, ['gudang_kecil', 'gudang_besar']) 
+                ? $warehouse 
+                : ($user['role'] === 'gudang_besar' ? 'gudang_besar' : 'gudang_kecil');
+            $_SESSION['role'] = $effectiveLoc;
+            $_SESSION['work_location'] = $effectiveLoc;
+        }
 
         setcookie(session_name(), session_id(), [
             'expires'  => time() + $sessionLifetime,
@@ -113,18 +151,21 @@ if ($action === 'login') {
             'samesite' => 'Lax',
         ]);
 
-        $sessionToken = generateSessionToken($user);
+        $userObj = [
+            'id' => $user['id'],
+            'username' => $user['username'],
+            'full_name' => $user['full_name'],
+            'role' => $_SESSION['role'],
+            'work_location' => $_SESSION['work_location']
+        ];
+
+        $sessionToken = generateSessionToken($userObj);
 
         jsonResp([
             'status' => 'success',
             'message' => 'Login berhasil.',
             'session_token' => $sessionToken,
-            'user' => [
-                'id' => $user['id'],
-                'username' => $user['username'],
-                'full_name' => $user['full_name'],
-                'role' => $user['role']
-            ]
+            'user' => $userObj
         ]);
     } else {
         jsonResp(['status' => 'error', 'message' => 'Username atau password salah.'], 401);
@@ -132,31 +173,13 @@ if ($action === 'login') {
 }
 
 if ($action === 'check_session') {
-    // If PHP session is lost (e.g. server worker recycle), restore from valid session_token
-    if (empty($_SESSION['username'])) {
-        $token = trim($input['session_token'] ?? $_SERVER['HTTP_X_SESSION_TOKEN'] ?? '');
-        if ($token) {
-            $verified = verifySessionToken($token);
-            if ($verified) {
-                $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-                $stmt->execute([$verified['uid']]);
-                $user = $stmt->fetch();
-                if ($user) {
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['username'] = $user['username'];
-                    $_SESSION['full_name'] = $user['full_name'];
-                    $_SESSION['role'] = $user['role'];
-                }
-            }
-        }
-    }
-
     if (!empty($_SESSION['username'])) {
         $userObj = [
             'id' => $_SESSION['user_id'],
             'username' => $_SESSION['username'],
             'full_name' => $_SESSION['full_name'],
-            'role' => $_SESSION['role']
+            'role' => $_SESSION['role'] ?? 'operator',
+            'work_location' => $_SESSION['work_location'] ?? $_SESSION['role'] ?? 'gudang_kecil'
         ];
         jsonResp([
             'status' => 'success',
@@ -167,6 +190,37 @@ if ($action === 'check_session') {
     } else {
         jsonResp(['status' => 'error', 'logged_in' => false, 'message' => 'Belum login.'], 200);
     }
+}
+
+if ($action === 'switch_work_location') {
+    $targetLoc = trim($input['warehouse'] ?? $input['work_location'] ?? '');
+    if (!in_array($targetLoc, ['gudang_kecil', 'gudang_besar'])) {
+        jsonResp(['status' => 'error', 'message' => 'Pilihan lokasi gudang tidak valid.'], 400);
+    }
+    if (empty($_SESSION['username'])) {
+        jsonResp(['status' => 'error', 'message' => 'Sesi login tidak aktif.'], 401);
+    }
+
+    if (($_SESSION['role'] ?? '') !== 'admin') {
+        $_SESSION['role'] = $targetLoc;
+    }
+    $_SESSION['work_location'] = $targetLoc;
+
+    $userObj = [
+        'id' => $_SESSION['user_id'],
+        'username' => $_SESSION['username'],
+        'full_name' => $_SESSION['full_name'],
+        'role' => $_SESSION['role'],
+        'work_location' => $targetLoc
+    ];
+
+    $locName = $targetLoc === 'gudang_besar' ? 'Gudang Besar (Main Storage)' : 'Gudang Kecil (Picking Rack)';
+    jsonResp([
+        'status' => 'success',
+        'message' => "Lokasi kerja berhasil dialihkan ke {$locName}.",
+        'session_token' => generateSessionToken($userObj),
+        'user' => $userObj
+    ]);
 }
 
 if ($action === 'logout') {

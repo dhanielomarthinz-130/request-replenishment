@@ -148,12 +148,50 @@ document.addEventListener('DOMContentLoaded', () => {
         setInterval(update, 10000);
     }
 
+    // State for Login Warehouse Choice (Default: gudang_kecil)
+    let selectedLoginWarehouse = 'gudang_kecil';
+
+    window.selectLoginWarehouse = function(wh) {
+        selectedLoginWarehouse = wh;
+        const optKecil = document.getElementById('optCardKecil');
+        const optBesar = document.getElementById('optCardBesar');
+        const radioKecil = document.getElementById('radioWhKecil');
+        const radioBesar = document.getElementById('radioWhBesar');
+
+        if (wh === 'gudang_besar') {
+            if (optKecil) optKecil.classList.remove('active');
+            if (optBesar) optBesar.classList.add('active');
+            if (radioBesar) radioBesar.checked = true;
+            if (optKecil) {
+                const ic = optKecil.querySelector('.card-radio-indicator i');
+                if (ic) ic.className = 'fa-regular fa-circle';
+            }
+            if (optBesar) {
+                const ib = optBesar.querySelector('.card-radio-indicator i');
+                if (ib) ib.className = 'fa-solid fa-circle-dot';
+            }
+        } else {
+            if (optBesar) optBesar.classList.remove('active');
+            if (optKecil) optKecil.classList.add('active');
+            if (radioKecil) radioKecil.checked = true;
+            if (optBesar) {
+                const ib = optBesar.querySelector('.card-radio-indicator i');
+                if (ib) ib.className = 'fa-regular fa-circle';
+            }
+            if (optKecil) {
+                const ic = optKecil.querySelector('.card-radio-indicator i');
+                if (ic) ic.className = 'fa-solid fa-circle-dot';
+            }
+        }
+    };
+
     function switchView(viewName) {
         viewLogin.classList.remove('active');
         viewOperator.classList.remove('active');
         viewAdmin.classList.remove('active');
 
         if (viewName === 'login') {
+            stopPickTaskAutoPolling();
             viewLogin.classList.add('active');
             loginUsername.focus();
         } else if (viewName === 'operator') {
@@ -162,27 +200,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 operatorDisplayName.textContent = AppState.user.full_name || AppState.user.username;
                 if (opProfileName) opProfileName.textContent = AppState.user.full_name;
 
-                const opBadge = document.querySelector('.warehouse-badge');
-                if (opBadge) {
-                    if (AppState.user.role === 'gudang_besar') {
-                        opBadge.innerHTML = `<i class="fa-solid fa-warehouse"></i> Gudang Besar (Bulk & Pick)`;
+                const effectiveWh = (AppState.user.work_location || AppState.user.role) === 'gudang_besar' ? 'gudang_besar' : 'gudang_kecil';
+
+                const opBadge = document.getElementById('opActiveWarehouseBadge') || document.querySelector('.warehouse-badge');
+                const badgeIcon = document.getElementById('opWarehouseBadgeIcon');
+                const badgeLabel = document.getElementById('opWarehouseLabelText');
+
+                if (effectiveWh === 'gudang_besar') {
+                    if (opBadge) {
                         opBadge.classList.add('gudang-besar');
-                    } else {
-                        opBadge.innerHTML = `<i class="fa-solid fa-box-open"></i> Gudang Kecil (Picking)`;
+                        opBadge.classList.remove('gudang-kecil');
+                    }
+                    if (badgeIcon) badgeIcon.className = 'fa-solid fa-warehouse';
+                    if (badgeLabel) badgeLabel.textContent = 'Gudang Besar (Main Storage)';
+                } else {
+                    if (opBadge) {
+                        opBadge.classList.add('gudang-kecil');
                         opBadge.classList.remove('gudang-besar');
                     }
+                    if (badgeIcon) badgeIcon.className = 'fa-solid fa-box-open';
+                    if (badgeLabel) badgeLabel.textContent = 'Gudang Kecil (Picking Rack)';
                 }
 
                 const opTag = document.getElementById('opProfileRoleTag');
                 if (opTag) {
-                    opTag.textContent = AppState.user.role === 'gudang_besar' ? 'Operator Gudang Besar (Task Pick)' : 'Operator Gudang Kecil (Request Replenish)';
+                    opTag.textContent = effectiveWh === 'gudang_besar' ? 'Operator Gudang Besar (Task Pick)' : 'Operator Gudang Kecil (Request Replenish)';
                 }
+
+                const profWhName = document.getElementById('profileWhName');
+                const profWhDesc = document.getElementById('profileWhDesc');
+                const profWhIcon = document.getElementById('profileWhIcon');
+                if (profWhName) profWhName.textContent = effectiveWh === 'gudang_besar' ? 'Gudang Besar' : 'Gudang Kecil';
+                if (profWhDesc) profWhDesc.textContent = effectiveWh === 'gudang_besar' ? 'Area Main Storage • Menerima Task Pick' : 'Area Picking Rack • Request Replenish';
+                if (profWhIcon) profWhIcon.innerHTML = `<i class="fa-solid fa-${effectiveWh === 'gudang_besar' ? 'warehouse' : 'box-open'}"></i>`;
             }
             setTimeout(() => inputBinCode && inputBinCode.focus(), 250);
             loadOperatorHistory();
             loadOpStockSearchList();
             loadPickTasks();
         } else if (viewName === 'admin') {
+            stopPickTaskAutoPolling();
             viewAdmin.classList.add('active');
             if (AppState.user) {
                 const displayName = AppState.user.full_name || AppState.user.username || 'ADMIN';
@@ -203,12 +260,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function routeForUser(user, preferredTab) {
         AppState.user = user;
+        const effectiveWh = (user.work_location || user.role) === 'gudang_besar' ? 'gudang_besar' : (user.role === 'admin' ? 'admin' : 'gudang_kecil');
+
         if (user.role === 'admin') {
+            stopPickTaskAutoPolling();
             switchView('admin');
             const tab = preferredTab || AppState.activeAdminTab || 'tabDashboard';
             if (document.getElementById(tab)) switchAdminTab(tab);
-        } else if (user.role === 'gudang_besar') {
+        } else if (effectiveWh === 'gudang_besar') {
             switchView('operator');
+            startPickTaskAutoPolling();
             const btnPick = document.getElementById('btnNavPickTask');
             if (preferredTab && document.getElementById(preferredTab)) {
                 switchMobileTab(preferredTab);
@@ -216,8 +277,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 switchMobileTab('opTabPickTask', btnPick);
             }
         } else {
-            // Role gudang_kecil or legacy operator
+            // Role gudang_kecil
             switchView('operator');
+            stopPickTaskAutoPolling();
             const btnScan = document.getElementById('btnNavScan');
             if (preferredTab && document.getElementById(preferredTab)) {
                 switchMobileTab(preferredTab);
@@ -242,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (data.logged_in && data.user) {
                 AppState.user = data.user;
-                if (!cached || !cached.user || cached.user.username !== data.user.username) {
+                if (!cached || !cached.user || cached.user.username !== data.user.username || (cached.user.work_location || cached.user.role) !== (data.user.work_location || data.user.role)) {
                     routeForUser(data.user, cached ? cached.activeTab : null);
                 }
                 writeCachedSession(data.user, AppState.activeAdminTab, data.session_token || token);
@@ -264,6 +326,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.quickLogin = async function(username, password) {
         loginUsername.value = username;
         loginPassword.value = password;
+        if (username === 'gudang_besar') {
+            selectLoginWarehouse('gudang_besar');
+        } else if (username === 'gudang_kecil') {
+            selectLoginWarehouse('gudang_kecil');
+        }
         await performLogin(username, password);
     };
 
@@ -277,14 +344,18 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('action', 'login');
             formData.append('username', username);
             formData.append('password', password);
+            formData.append('warehouse', selectedLoginWarehouse);
 
             const res = await fetch('api.php', { method: 'POST', body: formData, credentials: 'same-origin' });
             const data = await res.json();
 
             if (data.status === 'success') {
                 AppState.user = data.user;
-                writeCachedSession(data.user, data.user.role === 'admin' ? 'tabDashboard' : (data.user.role === 'gudang_besar' ? 'opTabPickTask' : 'opTabScan'), data.session_token);
-                showToast(`Login berhasil sebagai ${data.user.full_name}`, 'success');
+                const effectiveWh = (data.user.work_location || data.user.role) === 'gudang_besar' ? 'gudang_besar' : 'gudang_kecil';
+                const initialTab = data.user.role === 'admin' ? 'tabDashboard' : (effectiveWh === 'gudang_besar' ? 'opTabPickTask' : 'opTabScan');
+                
+                writeCachedSession(data.user, initialTab, data.session_token);
+                showToast(`Login berhasil sebagai ${data.user.full_name} (${effectiveWh === 'gudang_besar' ? 'Gudang Besar' : 'Gudang Kecil'})`, 'success');
                 routeForUser(data.user);
             } else {
                 showToast(data.message || 'Username atau password salah.', 'error');
@@ -293,11 +364,57 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Gagal terhubung ke server API.', 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = `<span>Masuk</span> <i class="fa-solid fa-arrow-right-to-bracket"></i>`;
+            btn.innerHTML = `<span>Masuk Sekarang</span> <i class="fa-solid fa-arrow-right-to-bracket"></i>`;
         }
     }
 
+    window.openSwitchWarehouseModal = function() {
+        const currentWh = (AppState.user && (AppState.user.work_location || AppState.user.role)) === 'gudang_besar' ? 'gudang_besar' : 'gudang_kecil';
+        const badgeKecil = document.getElementById('swBadgeCurrentKecil');
+        const badgeBesar = document.getElementById('swBadgeCurrentBesar');
+        const cardKecil = document.getElementById('btnSwitchCardKecil');
+        const cardBesar = document.getElementById('btnSwitchCardBesar');
+
+        if (badgeKecil) badgeKecil.style.display = currentWh === 'gudang_kecil' ? 'inline-block' : 'none';
+        if (badgeBesar) badgeBesar.style.display = currentWh === 'gudang_besar' ? 'inline-block' : 'none';
+        if (cardKecil) cardKecil.classList.toggle('active-wh', currentWh === 'gudang_kecil');
+        if (cardBesar) cardBesar.classList.toggle('active-wh', currentWh === 'gudang_besar');
+
+        openModal('modalSwitchWarehouse');
+    };
+
+    window.switchActiveWarehouse = async function(targetWarehouse) {
+        if (!AppState.user) return;
+        closeModal('modalSwitchWarehouse');
+
+        try {
+            const formData = new FormData();
+            formData.append('action', 'switch_work_location');
+            formData.append('warehouse', targetWarehouse);
+
+            const token = localStorage.getItem('ocsSessionToken') || '';
+            const res = await fetch('api.php' + (token ? `?session_token=${encodeURIComponent(token)}` : ''), {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+            const data = await res.json();
+            if (data.status === 'success' && data.user) {
+                AppState.user = data.user;
+                const newTab = targetWarehouse === 'gudang_besar' ? 'opTabPickTask' : 'opTabScan';
+                writeCachedSession(data.user, newTab, data.session_token);
+                showToast(data.message, 'success');
+                routeForUser(data.user, newTab);
+            } else {
+                showToast(data.message || 'Gagal mengganti lokasi gudang.', 'error');
+            }
+        } catch (err) {
+            showToast('Gagal menghubungi server: ' + err.message, 'error');
+        }
+    };
+
     window.logoutApp = async function() {
+        stopPickTaskAutoPolling();
         writeCachedSession(null);
         try {
             await fetch('api.php?action=logout', { credentials: 'same-origin' });
@@ -689,30 +806,139 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // 3B. TASK PICK GUDANG BESAR (OPERATOR GUDANG BESAR)
+    // 3B. TASK PICK GUDANG BESAR (OPERATOR GUDANG BESAR) - REALTIME SYNC
     // =========================================================================
 
     AppState.pickTasks = [];
     AppState.activePickFilter = 'PENDING';
     let pickTaskSearchTerm = '';
+    let pickTaskPollTimer = null;
+    let knownPendingTaskIds = new Set();
+    let isFirstPoll = true;
 
-    window.loadPickTasks = async function() {
+    // Gentle 2-tone melodic web audio chime for incoming pick tasks
+    function playNotificationChime() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+            osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.45);
+        } catch (e) {
+            // Audio context policy safe ignore
+        }
+    }
+
+    window.loadPickTasks = async function(isBackground = false) {
         const feed = document.getElementById('pickTasksFeed');
         if (!feed) return;
-        feed.innerHTML = `<div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat task pick...</div>`;
+        if (!isBackground && AppState.pickTasks.length === 0) {
+            feed.innerHTML = `<div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat task pick...</div>`;
+        }
 
         try {
-            const res = await fetch('api.php?action=get_replenish_requests&limit=100', { credentials: 'same-origin' });
+            const res = await fetch('api.php?action=get_replenish_requests&limit=100', { credentials: 'same-origin', cache: 'no-store' });
             const json = await res.json();
             if (json.status === 'success') {
-                AppState.pickTasks = json.data || [];
+                const incomingTasks = json.data || [];
+                const currentPending = incomingTasks.filter(t => t.status === 'PENDING');
+                const currentPendingIds = new Set(currentPending.map(t => String(t.id)));
+
+                // Check if any brand-new request arrived from Gudang Kecil
+                let freshTasks = [];
+                if (!isFirstPoll) {
+                    freshTasks = currentPending.filter(t => !knownPendingTaskIds.has(String(t.id)));
+                }
+                knownPendingTaskIds = currentPendingIds;
+                isFirstPoll = false;
+
+                if (freshTasks.length > 0) {
+                    // 1. Play alert chime & vibrate
+                    playNotificationChime();
+                    if (navigator.vibrate) {
+                        try { navigator.vibrate([150, 80, 150]); } catch (e) {}
+                    }
+
+                    // 2. Show alert banner in Gudang Besar view
+                    const banner = document.getElementById('newPickTaskAlert');
+                    if (banner) {
+                        const titleEl = document.getElementById('alertNewTaskTitle');
+                        const subEl = document.getElementById('alertNewTaskSubtitle');
+                        const firstFresh = freshTasks[0];
+                        if (titleEl) titleEl.textContent = `${freshTasks.length} Task Pick Baru dari Gudang Kecil!`;
+                        if (subEl) subEl.textContent = `#${firstFresh.request_no} • ${firstFresh.product_name} (${firstFresh.qty_request} Pcs)`;
+                        banner.style.display = 'flex';
+                    }
+
+                    showToast(`🔔 [Gudang Besar] ${freshTasks.length} Task Pick Baru Masuk dari Gudang Kecil!`, 'info');
+
+                    // 3. Pulse bottom nav bubble
+                    const bubble = document.getElementById('bubblePickTask');
+                    if (bubble) {
+                        bubble.classList.add('animate-bounce');
+                        setTimeout(() => bubble.classList.remove('animate-bounce'), 3000);
+                    }
+                }
+
+                AppState.pickTasks = incomingTasks;
                 updatePickCounters();
                 renderPickTasks();
-            } else {
+            } else if (!isBackground) {
                 feed.innerHTML = `<div class="empty-feed text-danger">Gagal memuat task: ${json.message}</div>`;
             }
         } catch (err) {
-            feed.innerHTML = `<div class="empty-feed text-danger">Gagal menghubungi server: ${err.message}</div>`;
+            if (!isBackground) {
+                feed.innerHTML = `<div class="empty-feed text-danger">Gagal menghubungi server: ${err.message}</div>`;
+            }
+        }
+    };
+
+    window.startPickTaskAutoPolling = function() {
+        window.stopPickTaskAutoPolling();
+        // Polling setiap 4 detik untuk update task otomatis
+        pickTaskPollTimer = setInterval(() => {
+            const isGb = AppState.user && ((AppState.user.work_location || AppState.user.role) === 'gudang_besar');
+            if (isGb) {
+                loadPickTasks(true);
+            }
+        }, 4000);
+    };
+
+    window.stopPickTaskAutoPolling = function() {
+        if (pickTaskPollTimer) {
+            clearInterval(pickTaskPollTimer);
+            pickTaskPollTimer = null;
+        }
+    };
+
+    window.focusNewestPickTask = function() {
+        const banner = document.getElementById('newPickTaskAlert');
+        if (banner) banner.style.display = 'none';
+
+        // Switch chip filter to PENDING
+        const pendingChip = document.querySelector('.pick-filter-chip[data-status="PENDING"]');
+        filterPickTasks('PENDING', pendingChip);
+
+        const feed = document.getElementById('pickTasksFeed');
+        if (feed) {
+            feed.scrollTop = 0;
+            const firstCard = feed.querySelector('.pick-task-card.pending');
+            if (firstCard) {
+                firstCard.classList.add('highlight-glow');
+                setTimeout(() => firstCard.classList.remove('highlight-glow'), 3500);
+            }
         }
     };
 

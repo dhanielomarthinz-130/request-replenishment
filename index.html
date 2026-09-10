@@ -161,9 +161,37 @@
               </div>
             </div>
 
+            <!-- Pilihan Lokasi Kerja Gudang Saat Login -->
+            <div class="warehouse-select-section">
+              <label class="warehouse-select-label">
+                <i class="fa-solid fa-map-location-dot"></i> Lokasi Tugas / Gudang Saat Ini:
+              </label>
+              <div class="warehouse-options-grid">
+                <label class="warehouse-option-card active" id="optCardKecil" onclick="selectLoginWarehouse('gudang_kecil')">
+                  <input type="radio" name="loginWarehouse" id="radioWhKecil" value="gudang_kecil" checked>
+                  <div class="card-radio-indicator"><i class="fa-solid fa-circle-dot"></i></div>
+                  <div class="card-icon kecil"><i class="fa-solid fa-box-open"></i></div>
+                  <div class="card-text">
+                    <strong>Gudang Kecil</strong>
+                    <span>Request Replenish / Picking</span>
+                  </div>
+                </label>
+
+                <label class="warehouse-option-card" id="optCardBesar" onclick="selectLoginWarehouse('gudang_besar')">
+                  <input type="radio" name="loginWarehouse" id="radioWhBesar" value="gudang_besar">
+                  <div class="card-radio-indicator"><i class="fa-regular fa-circle"></i></div>
+                  <div class="card-icon besar"><i class="fa-solid fa-warehouse"></i></div>
+                  <div class="card-text">
+                    <strong>Gudang Besar</strong>
+                    <span>Task Pick / Main Storage</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             <!-- Submit Button -->
             <button type="submit" id="btnLoginSubmit" class="btn-ieg-primary">
-              <span>Masuk</span>
+              <span>Masuk Sekarang</span>
               <i class="fa-solid fa-arrow-right-to-bracket"></i>
             </button>
           </form>
@@ -189,10 +217,17 @@
           </div>
           <div class="user-text-info">
             <h3 id="operatorDisplayName">Operator Gudang</h3>
-            <span class="warehouse-badge"><i class="fa-solid fa-location-dot"></i> Gudang Pusat (EJI_WMS)</span>
+            <span class="warehouse-badge clickable" id="opActiveWarehouseBadge" onclick="openSwitchWarehouseModal()" title="Klik untuk berganti lokasi tugas gudang">
+              <i class="fa-solid fa-box-open" id="opWarehouseBadgeIcon"></i> 
+              <span id="opWarehouseLabelText">Gudang Kecil</span>
+              <i class="fa-solid fa-repeat switch-icon" title="Ganti Lokasi"></i>
+            </span>
           </div>
         </div>
         <div class="nav-right-actions">
+          <button class="nav-icon-btn" onclick="openSwitchWarehouseModal()" title="Ganti Lokasi Kerja">
+            <i class="fa-solid fa-arrow-right-arrow-left"></i>
+          </button>
           <button class="nav-icon-btn" onclick="triggerOperatorSync()" title="Sync Ulang">
             <i class="fa-solid fa-rotate"></i>
           </button>
@@ -363,6 +398,24 @@
               </button>
             </div>
 
+            <!-- Live Realtime Sync Status Indicator -->
+            <div class="live-sync-indicator" id="liveSyncStatus">
+              <span class="pulse-dot"></span>
+              <span class="live-sync-text">Auto-Sync Aktif: Request dari Gudang Kecil otomatis masuk tanpa reload</span>
+            </div>
+
+            <!-- Floating New Task Arrived Alert Banner -->
+            <div id="newPickTaskAlert" class="new-task-arrived-banner" style="display: none;" onclick="focusNewestPickTask()">
+              <div class="banner-left">
+                <i class="fa-solid fa-bell bell-ringing"></i>
+                <div class="banner-texts">
+                  <strong id="alertNewTaskTitle">1 Task Pick Baru Masuk!</strong>
+                  <span id="alertNewTaskSubtitle">Ada permohonan replenish baru dari Gudang Kecil</span>
+                </div>
+              </div>
+              <span class="banner-btn-action">Lihat <i class="fa-solid fa-arrow-down"></i></span>
+            </div>
+
             <!-- Task Status Filters -->
             <div class="pick-status-filters" id="pickStatusFilters">
               <button type="button" class="pick-filter-chip active" data-status="PENDING" onclick="filterPickTasks('PENDING', this)">
@@ -439,6 +492,22 @@
                 <strong id="opStatsCompleted" class="text-green">0</strong>
                 <span>Selesai Dimutasi</span>
               </div>
+            </div>
+
+            <!-- Kartu Lokasi Gudang Aktif & Tombol Alihkan -->
+            <div class="profile-warehouse-box" onclick="openSwitchWarehouseModal()">
+              <div class="wh-box-icon" id="profileWhIcon">
+                <i class="fa-solid fa-box-open"></i>
+              </div>
+              <div class="wh-box-details">
+                <small>Lokasi Gudang Penugasan:</small>
+                <strong id="profileWhName">Gudang Kecil</strong>
+                <span class="wh-box-desc" id="profileWhDesc">Area Picking & Request Replenish</span>
+              </div>
+              <button type="button" class="btn-sm-wh-switch" title="Ganti Lokasi Gudang">
+                <span>Ganti</span>
+                <i class="fa-solid fa-arrow-right-arrow-left"></i>
+              </button>
             </div>
 
             <button class="btn-logout-mobile" onclick="logoutApp()">
@@ -1316,11 +1385,59 @@
   </div>
 
 
+  <!-- ========================================================================= -->
+  <!-- MODAL: GANTI LOKASI KERJA GUDANG (SWITCH WAREHOUSE) -->
+  <!-- ========================================================================= -->
+  <div id="modalSwitchWarehouse" class="clean-modal-overlay">
+    <div class="form-modal-box switch-wh-box">
+      <div class="form-modal-header">
+        <div>
+          <h3>Ganti Lokasi Gudang</h3>
+          <p class="modal-subtext">Pilih area pergudangan tempat Anda bertugas saat ini</p>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeModal('modalSwitchWarehouse')">&times;</button>
+      </div>
+      <div class="switch-wh-options-list">
+        <button type="button" class="switch-wh-card-btn" id="btnSwitchCardKecil" onclick="switchActiveWarehouse('gudang_kecil')">
+          <div class="sw-icon-wrap kecil">
+            <i class="fa-solid fa-box-open"></i>
+          </div>
+          <div class="sw-text-wrap">
+            <div class="sw-title-row">
+              <strong>Gudang Kecil</strong>
+              <span class="sw-badge-active" id="swBadgeCurrentKecil" style="display: none;">Aktif</span>
+            </div>
+            <p>Area Picking Rack • Scan barcode bin & ajukan request replenish stok</p>
+          </div>
+          <i class="fa-solid fa-chevron-right sw-arrow"></i>
+        </button>
+
+        <button type="button" class="switch-wh-card-btn" id="btnSwitchCardBesar" onclick="switchActiveWarehouse('gudang_besar')">
+          <div class="sw-icon-wrap besar">
+            <i class="fa-solid fa-warehouse"></i>
+          </div>
+          <div class="sw-text-wrap">
+            <div class="sw-title-row">
+              <strong>Gudang Besar</strong>
+              <span class="sw-badge-active" id="swBadgeCurrentBesar" style="display: none;">Aktif</span>
+            </div>
+            <p>Area Main Storage • Menerima Task Pick dari Gudang Kecil secara otomatis</p>
+          </div>
+          <i class="fa-solid fa-chevron-right sw-arrow"></i>
+        </button>
+      </div>
+      <div class="form-modal-footer">
+        <button type="button" class="btn-secondary-clean" style="width: 100%;" onclick="closeModal('modalSwitchWarehouse')">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+
   <!-- Toast Alerts Container -->
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=4.3"></script>
+  <script src="app.js?v=4.4"></script>
 </body>
 
 </html>
