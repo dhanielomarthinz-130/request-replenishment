@@ -977,10 +977,84 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    AppState.taskCollapseState = new Map();
+    let isAllTasksCollapsed = false;
+
+    function formatBatchDisplay(batch) {
+        if (!batch) return '-';
+        const str = String(batch).trim();
+        if (str.includes(';')) {
+            const parts = str.split(';').map(p => p.trim()).filter(p => p !== '');
+            return parts[0] || str;
+        }
+        return str;
+    }
+
+    window.toggleTaskCollapse = function(taskId, event) {
+        if (event) {
+            // Prevent toggling if user clicked an action button inside the card
+            if (event.target.closest('.btn-pick-action') || event.target.closest('a')) {
+                return;
+            }
+        }
+        const card = document.getElementById(`taskCard_${taskId}`);
+        if (!card) return;
+
+        const isCurrentlyCollapsed = card.classList.contains('is-collapsed');
+        const nextState = !isCurrentlyCollapsed;
+
+        AppState.taskCollapseState.set(String(taskId), nextState);
+
+        card.classList.toggle('is-collapsed', nextState);
+        card.classList.toggle('is-expanded', !nextState);
+
+        const icon = card.querySelector('.btn-card-toggle i');
+        if (icon) {
+            icon.className = nextState ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up';
+        }
+        const toggleBtn = card.querySelector('.btn-card-toggle');
+        if (toggleBtn) {
+            toggleBtn.title = nextState ? 'Maximize (Buka Detail)' : 'Minimize (Ciutkan)';
+        }
+    };
+
+    window.toggleAllCardsCollapse = function() {
+        isAllTasksCollapsed = !isAllTasksCollapsed;
+        const cards = document.querySelectorAll('.pick-task-card');
+        cards.forEach(card => {
+            const taskId = card.getAttribute('data-task-id');
+            if (taskId) {
+                AppState.taskCollapseState.set(String(taskId), isAllTasksCollapsed);
+            }
+            card.classList.toggle('is-collapsed', isAllTasksCollapsed);
+            card.classList.toggle('is-expanded', !isAllTasksCollapsed);
+
+            const icon = card.querySelector('.btn-card-toggle i');
+            if (icon) {
+                icon.className = isAllTasksCollapsed ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up';
+            }
+            const toggleBtn = card.querySelector('.btn-card-toggle');
+            if (toggleBtn) {
+                toggleBtn.title = isAllTasksCollapsed ? 'Maximize (Buka Detail)' : 'Minimize (Ciutkan)';
+            }
+        });
+
+        const mainIcon = document.querySelector('#btnToggleAllCards i');
+        const mainText = document.getElementById('textToggleAllCards');
+        if (mainIcon) {
+            mainIcon.className = isAllTasksCollapsed ? 'fa-solid fa-expand' : 'fa-solid fa-compress';
+        }
+        if (mainText) {
+            mainText.textContent = isAllTasksCollapsed ? 'Expand' : 'Minimize';
+        }
+    };
+
     window.filterPickTasks = function(status, btn) {
         AppState.activePickFilter = status;
-        document.querySelectorAll('.pick-filter-chip').forEach(c => c.classList.remove('active'));
-        if (btn) btn.classList.add('active');
+        document.querySelectorAll('.pick-filter-chip').forEach(c => {
+            if (c.id !== 'btnToggleAllCards') c.classList.remove('active');
+        });
+        if (btn && btn.id !== 'btnToggleAllCards') btn.classList.add('active');
         renderPickTasks();
     };
 
@@ -1009,9 +1083,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (filtered.length === 0) {
             feed.innerHTML = `
-                <div class="empty-feed">
-                    <i class="fa-solid fa-clipboard-check" style="font-size: 2rem; opacity: 0.35; margin-bottom: 0.5rem; display: block;"></i>
-                    Tidak ada task pick yang sesuai kriteria.
+                <div class="empty-feed" style="padding: 2.5rem 1rem; text-align: center; color: #94a3b8;">
+                    <i class="fa-solid fa-clipboard-check" style="font-size: 2.2rem; color: #cbd5e1; margin-bottom: 0.6rem; display: block;"></i>
+                    <strong style="color: #64748b; font-size: 0.95rem; display: block;">Tidak ada antrean task yang sesuai</strong>
+                    <span style="font-size: 0.8rem;">Semua barang siap ambil atau filter saat ini kosong.</span>
                 </div>
             `;
             return;
@@ -1021,63 +1096,91 @@ document.addEventListener('DOMContentLoaded', () => {
             const isPending = task.status === 'PENDING';
             const isCompleted = task.status === 'COMPLETED';
             const statusClass = isPending ? 'pending' : (isCompleted ? 'completed' : 'rejected');
-            const statusText = isPending ? 'Menunggu Pick' : (isCompleted ? 'Selesai Dipick' : task.status);
+            const statusText = isPending ? 'Menunggu Pick' : (isCompleted ? 'Selesai Direplenish' : task.status);
+
+            // Default: PENDING is expanded, COMPLETED is collapsed (unless user toggled)
+            let isCollapsed = isCompleted;
+            if (AppState.taskCollapseState.has(String(task.id))) {
+                isCollapsed = AppState.taskCollapseState.get(String(task.id));
+            }
+
+            const batchShort = formatBatchDisplay(task.batch_number);
+            const rawBatchEscaped = (task.batch_number || '').replace(/"/g, '&quot;');
 
             let actionArea = '';
             if (isPending) {
                 actionArea = `
                     <button type="button" class="btn-pick-action" onclick='openPickModal(${JSON.stringify(task).replace(/'/g, "&#39;")})'>
-                        <i class="fa-solid fa-dolly"></i> Ambil Barang (Pick)
+                        <i class="fa-solid fa-dolly"></i> Ambil Barang (Pick & Replenish)
                     </button>
                 `;
             } else if (isCompleted) {
                 actionArea = `
                     <div class="pick-completed-info">
                         <div class="completed-badge-row">
-                            <span class="info-pill gb-rack"><i class="fa-solid fa-warehouse"></i> Rak: <strong>${task.rack_gudang_besar || '-'}</strong></span>
-                            <span class="info-pill batch"><i class="fa-solid fa-barcode"></i> Batch: <strong>${task.batch_number || '-'}</strong></span>
+                            <span class="info-pill gb-rack"><i class="fa-solid fa-warehouse"></i> Rak GB: <strong>${task.rack_gudang_besar || '-'}</strong></span>
+                            <span class="info-pill batch" title="${rawBatchEscaped}"><i class="fa-solid fa-barcode"></i> Batch: <strong>${batchShort}</strong></span>
                         </div>
-                        <small class="completed-meta">Dipick oleh <strong>${task.picked_by || task.processed_by || 'Operator GB'}</strong> • ${task.picked_qty || task.qty_request} Pcs</small>
+                        <small class="completed-meta"><i class="fa-solid fa-circle-check"></i> Direplenish oleh <strong>${task.picked_by || task.processed_by || 'Operator GB'}</strong> • ${task.picked_qty || task.qty_request} Pcs</small>
                     </div>
                 `;
             }
 
             return `
-                <div class="pick-task-card ${statusClass}">
-                    <div class="task-card-header">
-                        <div class="task-no-group">
-                            <span class="task-no">${task.request_no}</span>
-                            <span class="task-time"><i class="fa-regular fa-clock"></i> ${(task.created_at || '').substring(0, 16)}</span>
+                <div class="pick-task-card ${statusClass} ${isCollapsed ? 'is-collapsed' : 'is-expanded'}" 
+                     id="taskCard_${task.id}" 
+                     data-task-id="${task.id}">
+                    
+                    <!-- Card Header (Tappable to Minimize / Maximize) -->
+                    <div class="task-card-header" onclick="toggleTaskCollapse('${task.id}', event)">
+                        <div class="task-header-main">
+                            <div class="task-no-row">
+                                <span class="task-no">#${task.request_no}</span>
+                                <span class="badge-status ${statusClass}">${statusText}</span>
+                            </div>
+                            <!-- Compact preview row when card is collapsed -->
+                            <div class="task-compact-preview">
+                                <span class="preview-prod-title">${task.product_name || task.sku}</span>
+                                <span class="preview-details-pill">
+                                    <i class="fa-solid fa-location-dot"></i> ${task.bin_code} • <strong>${task.qty_request} Pcs</strong>
+                                </span>
+                            </div>
                         </div>
-                        <span class="badge-status ${statusClass}">${statusText}</span>
+                        <button type="button" class="btn-card-toggle" title="${isCollapsed ? 'Maximize (Buka Detail)' : 'Minimize (Ciutkan)'}">
+                            <i class="fa-solid fa-chevron-${isCollapsed ? 'down' : 'up'}"></i>
+                        </button>
                     </div>
 
-                    <div class="task-location-row" style="flex-wrap: wrap; gap: 0.4rem;">
-                        <span class="loc-bin-tag"><i class="fa-solid fa-location-dot"></i> Rak Tujuan: <strong>${task.bin_code}</strong></span>
-                        <span class="requester-tag"><i class="fa-solid fa-user"></i> ${task.requested_by}</span>
-                        ${task.assigned_to ? `<span class="requester-tag" style="background: rgba(79, 70, 229, 0.1); color: #4338ca; border-color: rgba(79, 70, 229, 0.25);"><i class="fa-solid fa-user-check"></i> Ditugaskan: <strong>${task.assigned_to}</strong></span>` : ''}
-                    </div>
-
-                    <div class="task-prod-info">
-                        <h4 class="task-prod-name">${task.product_name}</h4>
-                        <div class="task-prod-meta">
-                            <span>SKU: <strong>${task.sku}</strong></span>
-                            <span>Barcode: ${task.barcode || '-'}</span>
+                    <!-- Collapsible Card Body -->
+                    <div class="task-card-body">
+                        <div class="task-location-row">
+                            <span class="loc-bin-tag"><i class="fa-solid fa-location-dot"></i> Rak Tujuan: <strong>${task.bin_code}</strong></span>
+                            <span class="requester-tag"><i class="fa-solid fa-user"></i> ${task.requested_by}</span>
+                            ${task.assigned_to ? `<span class="requester-tag assigned-highlight"><i class="fa-solid fa-user-check"></i> Ditugaskan: <strong>${task.assigned_to}</strong></span>` : ''}
+                            <span class="task-time-pill"><i class="fa-regular fa-clock"></i> ${(task.created_at || '').substring(0, 16)}</span>
                         </div>
-                    </div>
 
-                    <div class="task-qty-boxes">
-                        <div class="qty-box requested">
-                            <small>Diminta Gudang Kecil</small>
-                            <strong>${task.qty_request} Pcs</strong>
+                        <div class="task-prod-info">
+                            <h4 class="task-prod-name">${task.product_name}</h4>
+                            <div class="task-prod-meta">
+                                <span>SKU: <strong>${task.sku}</strong></span>
+                                <span>Barcode: <strong>${task.barcode || '-'}</strong></span>
+                            </div>
                         </div>
-                        <div class="qty-box besar">
-                            <small>Stok Gudang Besar</small>
-                            <strong>${task.qty_gudang_besar} Pcs</strong>
-                        </div>
-                    </div>
 
-                    ${actionArea}
+                        <div class="task-qty-boxes">
+                            <div class="qty-box requested">
+                                <small>Diminta Gudang Kecil</small>
+                                <strong>${task.qty_request} Pcs</strong>
+                            </div>
+                            <div class="qty-box besar">
+                                <small>Stok Gudang Besar</small>
+                                <strong>${Number(task.qty_gudang_besar || 0).toLocaleString('id-ID')} Pcs</strong>
+                            </div>
+                        </div>
+
+                        ${actionArea}
+                    </div>
                 </div>
             `;
         }).join('');
