@@ -12,9 +12,36 @@ document.addEventListener('DOMContentLoaded', () => {
         activeReplenishFilter: 'ALL',
         skuRacks: [],
         stocks: [],
+        minusStocks: [],
+        minusThreshold: 0,
         replenishRequests: [],
         isSyncing: false
     };
+
+    // A refresh used to drop straight back to the login screen while the
+    // check_session round trip was still in flight. Cache the last known
+    // identity + tab locally so the correct view paints immediately, then let
+    // the server response confirm or revoke it.
+    const SESSION_CACHE_KEY = 'ocsWmsSession';
+
+    function readCachedSession() {
+        try {
+            const raw = localStorage.getItem(SESSION_CACHE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (err) {
+            return null;
+        }
+    }
+
+    function writeCachedSession(user, activeTab) {
+        try {
+            if (!user) {
+                localStorage.removeItem(SESSION_CACHE_KEY);
+                return;
+            }
+            localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user, activeTab: activeTab || null }));
+        } catch (err) { /* private mode / quota - fall back to server session only */ }
+    }
 
     // DOM Elements - Views
     const viewLogin = document.getElementById('viewLogin');
@@ -79,10 +106,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminReplenishTableBody = document.getElementById('adminReplenishTableBody');
     const stockMasterTableBody = document.getElementById('stockMasterTableBody');
     const usersTableBody = document.getElementById('usersTableBody');
+    const minusStockTableBody = document.getElementById('minusStockTableBody');
+    const badgeMinusCount = document.getElementById('badgeMinusCount');
 
     // Search & Filters
     const searchSkuRacks = document.getElementById('searchSkuRacks');
     const searchStocks = document.getElementById('searchStocks');
+    const searchMinusStock = document.getElementById('searchMinusStock');
+    const minusThresholdFilters = document.getElementById('minusThresholdFilters');
     const replenishStatusFilters = document.getElementById('replenishStatusFilters');
 
     // Modals
@@ -100,7 +131,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
 
     initAndroidClock();
-    checkSession();
 
     function initAndroidClock() {
         if (!androidClock) return;
@@ -143,22 +173,42 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. AUTHENTICATION
     // =========================================================================
 
+    function routeForUser(user, preferredTab) {
+        AppState.user = user;
+        if (user.role === 'admin') {
+            switchView('admin');
+            const tab = preferredTab || AppState.activeAdminTab || 'tabDashboard';
+            if (document.getElementById(tab)) switchAdminTab(tab);
+        } else {
+            switchView('operator');
+        }
+    }
+
     async function checkSession() {
+        // Optimistic restore first so a refresh does not flash the login form.
+        const cached = readCachedSession();
+        if (cached && cached.user) {
+            routeForUser(cached.user, cached.activeTab);
+        }
+
         try {
-            const res = await fetch('api.php?action=check_session');
+            const res = await fetch('api.php?action=check_session', { credentials: 'same-origin', cache: 'no-store' });
             const data = await res.json();
             if (data.logged_in && data.user) {
-                AppState.user = data.user;
-                if (AppState.user.role === 'admin') {
-                    switchView('admin');
+                if (!cached || !cached.user || cached.user.username !== data.user.username) {
+                    routeForUser(data.user, cached ? cached.activeTab : null);
                 } else {
-                    switchView('operator');
+                    AppState.user = data.user;
                 }
+                writeCachedSession(data.user, AppState.activeAdminTab);
             } else {
+                writeCachedSession(null);
                 switchView('login');
             }
         } catch (err) {
-            switchView('login');
+            // Network hiccup only: keep the optimistic view rather than kicking
+            // the user out of a session the server may still consider valid.
+            if (!cached || !cached.user) switchView('login');
         }
     }
 
@@ -189,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data.status === 'success') {
                 AppState.user = data.user;
+                writeCachedSession(data.user, 'tabDashboard');
                 showToast(`Login berhasil sebagai ${data.user.full_name}`, 'success');
                 if (data.user.role === 'admin') {
                     switchView('admin');
@@ -207,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.logoutApp = async function() {
+        writeCachedSession(null);
         try {
             await fetch('api.php?action=logout');
             AppState.user = null;
@@ -637,6 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.switchAdminTab = function(tabId) {
         AppState.activeAdminTab = tabId;
+        if (AppState.user) writeCachedSession(AppState.user, tabId);
 
         portalNavButtons.forEach(b => {
             if (b.getAttribute('data-tab') === tabId) b.classList.add('active');
@@ -653,12 +706,15 @@ document.addEventListener('DOMContentLoaded', () => {
             tabSkuRacks: { title: 'Master SKU-Rack & Bin Code', sub: 'Pemetaan kode Bin, Rak Lokasi, SKU, dan Barcode Produk' },
             tabReplenish: { title: 'Permintaan Replenishment', sub: 'Daftar pengajuan mutasi Gudang Besar ke Gudang Kecil' },
             tabStocks: { title: 'Data Stok OCS (Live Inventory)', sub: 'Snapshot saldo stok fisik, Gudang Besar, dan Gudang Kecil' },
+            tabMinusStock: { title: 'Stok Minus Gudang Kecil', sub: 'Daftar SKU dengan saldo Gudang Kecil minus atau habis' },
             tabUsers: { title: 'Manajemen Pengguna', sub: 'Kelola akun login Operator Gudang dan Administrator' }
         };
 
         if (titles[tabId]) {
-            adminPageTitle.textContent = titles[tabId].title;
-            adminPageSubtitle.textContent = titles[tabId].sub;
+            // The topbar was redesigned without a subtitle line; guard both so a
+            // missing node cannot abort the rest of the tab switch.
+            if (adminPageTitle) adminPageTitle.textContent = titles[tabId].title;
+            if (adminPageSubtitle) adminPageSubtitle.textContent = titles[tabId].sub;
             const breadcrumbCurrent = document.getElementById('breadcrumbCurrent');
             if (breadcrumbCurrent) {
                 const shortTitles = {
@@ -666,6 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tabSkuRacks: 'Master SKU-Rack',
                     tabReplenish: 'Replenishment',
                     tabStocks: 'Stok OCS',
+                    tabMinusStock: 'Stok Minus',
                     tabUsers: 'Pengguna'
                 };
                 breadcrumbCurrent.textContent = shortTitles[tabId] || titles[tabId].title;
@@ -676,6 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabId === 'tabSkuRacks') loadSkuRacks();
         if (tabId === 'tabReplenish') loadAdminReplenish();
         if (tabId === 'tabStocks') loadStockList();
+        if (tabId === 'tabMinusStock') loadMinusStock();
         if (tabId === 'tabUsers') loadUsers();
     };
 
@@ -690,6 +748,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 statCompletedReplenish.textContent = d.completed_replenish.toLocaleString('id-ID');
                 statTotalSku.textContent = d.total_sku.toLocaleString('id-ID');
                 badgePendingCount.textContent = d.pending_replenish;
+                if (badgeMinusCount) {
+                    const minus = d.minus_stock_count || 0;
+                    badgeMinusCount.textContent = minus;
+                    badgeMinusCount.style.display = minus > 0 ? '' : 'none';
+                }
+                const elNeg = document.getElementById('minusCountNegative');
+                const elZero = document.getElementById('minusCountZero');
+                if (elNeg) elNeg.textContent = (d.minus_stock_count || 0).toLocaleString('id-ID');
+                if (elZero) elZero.textContent = (d.empty_stock_count || 0).toLocaleString('id-ID');
             }
 
             const resReq = await fetch('api.php?action=get_replenish_requests&limit=5');
@@ -785,14 +852,32 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        skuRacksTableBody.innerHTML = items.map(r => `
+        skuRacksTableBody.innerHTML = items.map(r => {
+            // OCS returns some SKUs with no physical bin yet; the sync stores a
+            // synthetic "BIN-<sku>" key for those. Show them as unmapped instead
+            // of echoing the SKU back in both location columns.
+            const sku = r.sku || '';
+            const binCode = r.bin_code || '';
+            const isUnmapped = binCode.toUpperCase() === ('BIN-' + sku).toUpperCase();
+            const area = (r.notes || '').replace(/^Area:\s*/i, '').trim();
+
+            const binCell = isUnmapped
+                ? `<span class="bin-unmapped-tag"><i class="fa-solid fa-circle-question"></i> Belum Dipetakan</span>`
+                : `<strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${binCode}</strong>`;
+
+            let rackLabel = r.rack_name || '';
+            if (isUnmapped || !rackLabel || rackLabel.toUpperCase() === binCode.toUpperCase()) {
+                rackLabel = isUnmapped ? (area ? `Area ${area}` : 'Belum ada lokasi rak') : `Rak ${binCode}`;
+            }
+
+            return `
             <tr>
-                <td><strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</strong></td>
-                <td><strong>${r.rack_name}</strong></td>
-                <td><code>${r.sku}</code></td>
-                <td><span style="font-family: var(--font-mono); font-size: 0.82rem; color: #475569;">${r.barcode || '-'}</span></td>
+                <td><code>${sku}</code></td>
                 <td><strong style="color: #0f172a;">${r.product_name}</strong></td>
+                <td><span style="font-family: var(--font-mono); font-size: 0.82rem; color: #475569;">${r.barcode || '-'}</span></td>
                 <td><span style="background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600;">${r.category || 'General'}</span></td>
+                <td>${binCell}</td>
+                <td><strong>${rackLabel}</strong>${(!isUnmapped && area) ? `<br><small style="color: var(--text-muted);">Area: ${area}</small>` : ''}</td>
                 <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(r.created_at || '').substring(0, 10)}</small></td>
                 <td class="td-center">
                     <div style="display: flex; gap: 0.35rem; justify-content: center;">
@@ -801,7 +886,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     }
 
     window.openModalAddRack = function() {
@@ -1041,109 +1127,156 @@ document.addEventListener('DOMContentLoaded', () => {
         `).join('');
     }
 
-    // Fullscreen OCS Sync Modal with Progress & Spinner
-    window.openSyncProgressModal = async function() {
-        if (AppState.isSyncing) return;
-        AppState.isSyncing = true;
+    // =========================================================================
+    // 7B. STOK MINUS GUDANG KECIL
+    // =========================================================================
 
-        syncProgressBar.style.width = '10%';
-        syncStepStatus.textContent = 'Menghubungkan ke OCS Cloud API...';
-        syncItemCounter.textContent = 'Memulai...';
-        syncLogBox.innerHTML = `
-            <div class="log-entry info">[START] Membuka sesi otentikasi OCS Cloud...</div>
-            <div class="log-entry info">[OData] Memanggil DTO_WmsItemStockLiteV2 dengan pagination looping...</div>
-        `;
-        btnCloseSyncModal.disabled = true;
-
-        openModal('modalSyncProgress');
+    window.loadMinusStock = async function() {
+        if (!minusStockTableBody) return;
+        const search = searchMinusStock ? searchMinusStock.value.trim() : '';
+        minusStockTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data stok minus...</td></tr>`;
 
         try {
-            // Animate progress step
-            syncProgressBar.style.width = '35%';
-            syncStepStatus.textContent = 'Mengunduh 2,500+ data stok OCS...';
-
-            const res = await fetch('api.php?action=sync_all_stock');
+            const url = `api.php?action=get_negative_stocks&threshold=${AppState.minusThreshold}&search=${encodeURIComponent(search)}`;
+            const res = await fetch(url, { credentials: 'same-origin' });
             const json = await res.json();
-
             if (json.status === 'success') {
-                syncProgressBar.style.width = '100%';
-                syncStepStatus.textContent = 'Sinkronisasi Selesai!';
-                syncItemCounter.textContent = `${json.total_synced} Items`;
-
-                syncLogBox.innerHTML += `
-                    <div class="log-entry success">[SUCCESS] Mengunduh ${json.total_synced} item stok selesai!</div>
-                    <div class="log-entry success">[DB] Seluruh saldo Gudang Besar & Kecil tersimpan di MySQL.</div>
-                    <div class="log-entry info">[DONE] Waktu: ${json.timestamp}</div>
-                `;
-                syncLogBox.scrollTop = syncLogBox.scrollHeight;
-
-                showToast(`🎉 Berhasil sync ${json.total_synced} item dari OCS Cloud!`, 'success');
-                loadStockList();
-                loadDashboardStats();
+                AppState.minusStocks = json.data;
+                renderMinusStockTable(json.data);
+                const elRows = document.getElementById('minusCountRows');
+                if (elRows) elRows.textContent = (json.total_rows || 0).toLocaleString('id-ID');
             } else {
-                syncProgressBar.style.width = '100%';
-                syncStepStatus.textContent = 'Gagal Sync';
-                syncLogBox.innerHTML += `<div class="log-entry error">[ERROR] ${json.message}</div>`;
-                showToast(json.message || 'Gagal sinkronisasi.', 'error');
+                minusStockTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--danger);">${json.message || 'Gagal memuat data.'}</td></tr>`;
             }
         } catch (err) {
-            syncStepStatus.textContent = 'Error Koneksi';
-            syncLogBox.innerHTML += `<div class="log-entry error">[EXCEPTION] ${err.message}</div>`;
-            showToast('Error koneksi: ' + err.message, 'error');
-        } finally {
-            AppState.isSyncing = false;
-            btnCloseSyncModal.disabled = false;
+            minusStockTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--danger);">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
-    // Fullscreen SKU-Rack Sync Modal with Progress & Spinner
-    window.openSyncSkuRackModal = async function() {
+    function renderMinusStockTable(items) {
+        if (!items || items.length === 0) {
+            minusStockTableBody.innerHTML = `<tr><td colspan="8" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 1.4rem; display: block; margin-bottom: 0.5rem;"></i>Tidak ada stok Gudang Kecil yang minus untuk filter ini.</td></tr>`;
+            return;
+        }
+
+        minusStockTableBody.innerHTML = items.map(s => {
+            const kecil = Number(s.qty_gudang_kecil || 0);
+            const qtyClass = kecil < 0 ? 'qty-minus' : (kecil === 0 ? 'qty-warn' : '');
+            const binLabel = s.bin_code && !String(s.bin_code).toUpperCase().startsWith('BIN-' + String(s.sku).toUpperCase())
+                ? `<strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</strong><br><small style="color: var(--text-muted);">${s.rack_name || ''}</small>`
+                : `<span class="bin-unmapped-tag"><i class="fa-solid fa-circle-question"></i> Belum Dipetakan</span>`;
+
+            return `
+                <tr>
+                    <td><code>${s.sku}</code></td>
+                    <td><strong style="color: #0f172a;">${s.product_name || '-'}</strong></td>
+                    <td><span style="font-family: var(--font-mono); font-size: 0.82rem; color: #475569;">${s.barcode || '-'}</span></td>
+                    <td>${binLabel}</td>
+                    <td class="td-right"><strong class="${qtyClass}">${kecil.toLocaleString('id-ID')}</strong></td>
+                    <td class="td-right">${Number(s.qty_gudang_besar || 0).toLocaleString('id-ID')}</td>
+                    <td class="td-right">${Number(s.qty_on_hand || 0).toLocaleString('id-ID')}</td>
+                    <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(s.last_synced_at || '-').substring(0, 16)}</small></td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    if (searchMinusStock) {
+        searchMinusStock.addEventListener('input', debounce(() => loadMinusStock(), 300));
+    }
+
+    if (minusThresholdFilters) {
+        minusThresholdFilters.querySelectorAll('.pill-filter').forEach(btn => {
+            btn.addEventListener('click', () => {
+                minusThresholdFilters.querySelectorAll('.pill-filter').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                AppState.minusThreshold = Number(btn.getAttribute('data-threshold'));
+                loadMinusStock();
+            });
+        });
+    }
+
+    // =========================================================================
+    // 7C. UNIFIED OCS SYNC (SKU-RACK + STOK, ONE BUTTON)
+    // =========================================================================
+
+    function syncLog(html) {
+        syncLogBox.innerHTML += html;
+        syncLogBox.scrollTop = syncLogBox.scrollHeight;
+    }
+
+    // One button now covers both halves of the OCS import: the SKU-Rack mapping
+    // has to land first, because the stock pass relies on its barcode map to
+    // resolve rows the stock feed leaves blank.
+    window.runFullOcsSync = async function() {
         if (AppState.isSyncing) return;
         AppState.isSyncing = true;
 
-        syncProgressBar.style.width = '15%';
-        syncStepStatus.textContent = 'Menghubungkan ke OCS Cloud Master SKU-Rack...';
+        syncProgressBar.style.width = '8%';
+        syncStepStatus.textContent = 'Menghubungkan ke OCS Cloud API...';
         syncItemCounter.textContent = 'Memulai...';
-        syncLogBox.innerHTML = `
-            <div class="log-entry info">[START] Membuka sesi otentikasi OCS Cloud...</div>
-            <div class="log-entry info">[OData] Mengambil data pemetaan dari DTO_WmsItems (https://ocs.iegsystem.id/master/sku-rack)...</div>
-            <div class="log-entry info">[OData] Mengambil data barcode produk dari DTO_LookupStockDetailedData...</div>
-        `;
+        syncLogBox.innerHTML = `<div class="log-entry info">[START] Membuka sesi otentikasi OCS Cloud...</div>`;
         btnCloseSyncModal.disabled = true;
-
         openModal('modalSyncProgress');
 
+        let rackCount = 0;
+        let stockCount = 0;
+        let failed = false;
+
         try {
-            syncProgressBar.style.width = '50%';
-            syncStepStatus.textContent = 'Mengunduh 680+ lokasi Bin Rack dari OCS...';
+            // --- Tahap 1: Master SKU-Rack & Barcode ---
+            syncProgressBar.style.width = '20%';
+            syncStepStatus.textContent = 'Tahap 1/2 - Sinkronisasi Master SKU-Rack & Barcode...';
+            syncLog(`<div class="log-entry info">[OData] DTO_WmsItems + DTO_LookupStockDetailedData...</div>`);
 
-            const res = await fetch('api.php?action=sync_sku_racks_from_ocs');
-            const json = await res.json();
+            const resRack = await fetch('api.php?action=sync_sku_racks_from_ocs', { credentials: 'same-origin' });
+            const jsonRack = await resRack.json();
 
-            if (json.status === 'success') {
-                syncProgressBar.style.width = '100%';
-                syncStepStatus.textContent = 'Sinkronisasi SKU-Rack Selesai!';
-                syncItemCounter.textContent = `${json.total_synced} Lokasi`;
-
-                syncLogBox.innerHTML += `
-                    <div class="log-entry success">[SUCCESS] Mengunduh ${json.total_synced} lokasi Bin Code dari OCS selesai!</div>
-                    <div class="log-entry success">[DB] Database master SKU-Rack berhasil diperbarui.</div>
-                    <div class="log-entry info">[DONE] Waktu: ${json.timestamp}</div>
-                `;
-                syncLogBox.scrollTop = syncLogBox.scrollHeight;
-
-                showToast(`🎉 Berhasil sync ${json.total_synced} lokasi SKU-Rack dari OCS Cloud!`, 'success');
-                loadSkuRacks();
-                loadDashboardStats();
+            if (jsonRack.status === 'success') {
+                rackCount = jsonRack.total_synced || 0;
+                syncProgressBar.style.width = '55%';
+                syncItemCounter.textContent = `${rackCount} Lokasi`;
+                syncLog(`<div class="log-entry success">[SUCCESS] ${rackCount} pemetaan Bin Code tersimpan.</div>`);
             } else {
-                syncProgressBar.style.width = '100%';
-                syncStepStatus.textContent = 'Gagal Sync';
-                syncLogBox.innerHTML += `<div class="log-entry error">[ERROR] ${json.message}</div>`;
-                showToast(json.message || 'Gagal sinkronisasi SKU-Rack.', 'error');
+                failed = true;
+                syncLog(`<div class="log-entry error">[ERROR] Tahap SKU-Rack gagal: ${jsonRack.message}</div>`);
             }
+
+            // --- Tahap 2: Saldo Stok (tetap dijalankan agar saldo tidak basi) ---
+            syncProgressBar.style.width = '65%';
+            syncStepStatus.textContent = 'Tahap 2/2 - Sinkronisasi Saldo Stok OCS...';
+            syncLog(`<div class="log-entry info">[OData] DTO_WmsItemStockLiteV2 dengan pagination looping...</div>`);
+
+            const resStock = await fetch('api.php?action=sync_all_stock', { credentials: 'same-origin' });
+            const jsonStock = await resStock.json();
+
+            if (jsonStock.status === 'success') {
+                stockCount = jsonStock.total_synced || 0;
+                syncLog(`<div class="log-entry success">[SUCCESS] ${stockCount} item stok tersimpan (Gudang Besar & Kecil).</div>`);
+            } else {
+                failed = true;
+                syncLog(`<div class="log-entry error">[ERROR] Tahap Stok gagal: ${jsonStock.message}</div>`);
+            }
+
+            syncProgressBar.style.width = '100%';
+            syncItemCounter.textContent = `${rackCount} Lokasi / ${stockCount} Item`;
+
+            if (failed) {
+                syncStepStatus.textContent = 'Sinkronisasi Selesai Sebagian';
+                showToast('Sync selesai sebagian - cek log untuk detail.', 'error');
+            } else {
+                syncStepStatus.textContent = 'Sinkronisasi Selesai!';
+                syncLog(`<div class="log-entry info">[DONE] Waktu: ${new Date().toLocaleString('id-ID')}</div>`);
+                showToast(`🎉 Sync OCS selesai: ${rackCount} lokasi & ${stockCount} item stok.`, 'success');
+            }
+
+            loadSkuRacks();
+            loadStockList();
+            loadMinusStock();
+            loadDashboardStats();
         } catch (err) {
             syncStepStatus.textContent = 'Error Koneksi';
-            syncLogBox.innerHTML += `<div class="log-entry error">[EXCEPTION] ${err.message}</div>`;
+            syncLog(`<div class="log-entry error">[EXCEPTION] ${err.message}</div>`);
             showToast('Error koneksi: ' + err.message, 'error');
         } finally {
             AppState.isSyncing = false;
@@ -1285,6 +1418,10 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => toast.remove(), 300);
         }, 3500);
     };
+
+    // Bootstrapped last so every window.* handler declared above already exists
+    // by the time an optimistically restored session paints its view.
+    checkSession();
 
     function debounce(func, wait) {
         let timeout;

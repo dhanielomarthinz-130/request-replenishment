@@ -2973,3 +2973,113 @@ body {
   border-color: #a5b4fc;
   color: var(--primary);
 }
+
+/* =========================================================================
+   STOK MINUS GUDANG KECIL & MASTER SKU-RACK TIDINESS
+   ========================================================================= */
+.portal-badge.danger {
+  background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
+  box-shadow: 0 2px 6px rgba(190, 18, 60, 0.38);
+}
+
+.module-icon-box.danger-gradient {
+  background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(190, 18, 60, 0.3);
+}
+.ieg-module-card:hover .module-icon-box.danger-gradient {
+  background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
+}
+
+/* Unmapped bin marker - OCS has no physical rack for the SKU yet */
+.bin-unmapped-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.qty-minus {
+  color: #be123c;
+  font-family: var(--font-mono);
+  font-weight: 800;
+}
+
+.minus-stock-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.minus-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+.minus-summary-icon {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  font-size: 1.1rem;
+  color: #ffffff;
+}
+.minus-summary-card.danger { border-color: #fecdd3; }
+.minus-summary-card.danger .minus-summary-icon { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%); }
+.minus-summary-card.amber { border-color: #fde68a; }
+.minus-summary-card.amber .minus-summary-icon { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.minus-summary-card.indigo { border-color: #c7d2fe; }
+.minus-summary-card.indigo .minus-summary-icon { background: var(--brand-gradient); }
+
+.minus-summary-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.15;
+  font-family: var(--font-mono);
+}
+.minus-summary-label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+#minusThresholdFilters {
+  display: flex;
+  gap: 0.35rem;
+  margin-right: 0.4rem;
+}
+
+/* Master SKU-Rack column sizing - stop the product name wrapping into a
+   six-line block while Kategori/Bin Code sit half empty. */
+#tabSkuRacks .table-clean th:nth-child(1),
+#tabSkuRacks .table-clean td:nth-child(1) { width: 14%; }
+#tabSkuRacks .table-clean th:nth-child(2),
+#tabSkuRacks .table-clean td:nth-child(2) { width: 26%; min-width: 240px; }
+#tabSkuRacks .table-clean th:nth-child(3),
+#tabSkuRacks .table-clean td:nth-child(3) { width: 12%; }
+#tabSkuRacks .table-clean th:nth-child(4),
+#tabSkuRacks .table-clean td:nth-child(4) { width: 11%; }
+#tabSkuRacks .table-clean th:nth-child(5),
+#tabSkuRacks .table-clean td:nth-child(5) { width: 14%; }
+#tabSkuRacks .table-clean th:nth-child(6),
+#tabSkuRacks .table-clean td:nth-child(6) { width: 14%; }
+
+#tabMinusStock .table-clean th:nth-child(2),
+#tabMinusStock .table-clean td:nth-child(2) { min-width: 230px; }

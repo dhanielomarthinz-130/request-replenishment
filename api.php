@@ -3,7 +3,31 @@
  * REST API Backend for OCS Stock Sync & Bin Code Replenishment System
  */
 
+// A browser-lifetime cookie made every page refresh look like a fresh visit on
+// hosts that recycle sessions aggressively, so the login form kept reappearing.
+// Pin an explicit 12 hour cookie plus a matching GC lifetime instead.
+$sessionLifetime = 12 * 60 * 60;
+ini_set('session.gc_maxlifetime', (string)$sessionLifetime);
+ini_set('session.use_strict_mode', '1');
+session_set_cookie_params([
+    'lifetime' => $sessionLifetime,
+    'path'     => '/',
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
 session_start();
+
+// Slide the expiry forward on every authenticated call so an active admin is
+// never logged out mid-shift.
+if (!empty($_SESSION['user_id'])) {
+    setcookie(session_name(), session_id(), [
+        'expires'  => time() + $sessionLifetime,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -349,16 +373,24 @@ if ($action === 'sync_sku_racks_from_ocs') {
             $sku = trim($wItem['SkuId'] ?? '');
             if (empty($sku)) continue;
 
+            $area = trim($wItem['AreaId'] ?? '') ?: 'Pusat';
             $binCode = trim($wItem['BinCode'] ?? '');
-            if (empty($binCode)) {
+            $isMapped = $binCode !== '';
+            if (!$isMapped) {
+                // OCS has no physical bin for this SKU yet. A synthetic key still
+                // has to exist so the row is addressable, but it must not be
+                // dressed up as a real rack name.
                 $binCode = 'BIN-' . $sku;
             }
 
-            $binName = trim($wItem['BinName'] ?? '') ?: 'Lokasi ' . $binCode;
+            $binName = trim($wItem['BinName'] ?? '');
+            if ($binName === '' || strcasecmp($binName, $binCode) === 0) {
+                $binName = $isMapped ? ('Rak ' . $binCode) : ('Belum Dipetakan - Area ' . $area);
+            }
             $productName = trim($wItem['SkuName'] ?? '') ?: $sku;
             $category = trim($wItem['ShopCode'] ?? '') ?: 'General';
             $barcode = $barcodeMap[strtoupper($sku)] ?? '';
-            $notes = 'Area: ' . ($wItem['AreaId'] ?? 'Pusat');
+            $notes = 'Area: ' . $area;
 
             // A single rejected row must never discard the whole batch, so each
             // upsert is isolated and only counted as skipped when it fails.
@@ -515,6 +547,47 @@ if ($action === 'get_stocks') {
     jsonResp(['status' => 'success', 'data' => $rows]);
 }
 
+if ($action === 'get_negative_stocks') {
+    $search = trim($input['search'] ?? '');
+    // Anything at or below the threshold counts as "minus" for the operator:
+    // 0 already blocks picking, so it is surfaced next to the true negatives.
+    $threshold = isset($input['threshold']) ? (int)$input['threshold'] : 0;
+
+    $sql = "SELECT s.id, s.sku,
+                   COALESCE(NULLIF(s.barcode, ''), NULLIF(MAX(r.barcode), ''), '-') as barcode,
+                   s.product_name, s.area_id, s.qty_on_hand, s.qty_available,
+                   s.qty_gudang_kecil, s.qty_gudang_besar, s.last_synced_at,
+                   MAX(r.bin_code) as bin_code, MAX(r.rack_name) as rack_name
+            FROM stock_master s
+            LEFT JOIN sku_rack_locations r ON UPPER(s.sku) = UPPER(r.sku)
+            WHERE s.qty_gudang_kecil <= ?";
+    $params = [$threshold];
+
+    if (!empty($search)) {
+        $sql .= " AND (s.sku LIKE ? OR s.barcode LIKE ? OR s.product_name LIKE ? OR r.bin_code LIKE ?)";
+        $term = "%$search%";
+        array_push($params, $term, $term, $term, $term);
+    }
+
+    $sql .= " GROUP BY s.id ORDER BY s.qty_gudang_kecil ASC, s.sku ASC LIMIT 500";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
+
+    $trueMinus = 0;
+    foreach ($rows as $row) {
+        if ((int)$row['qty_gudang_kecil'] < 0) $trueMinus++;
+    }
+
+    jsonResp([
+        'status' => 'success',
+        'threshold' => $threshold,
+        'total_minus' => $trueMinus,
+        'total_rows' => count($rows),
+        'data' => $rows
+    ]);
+}
+
 if ($action === 'sync_all_stock') {
     set_time_limit(300);
     $token = ocsApiLogin();
@@ -649,6 +722,8 @@ if ($action === 'get_dashboard_stats') {
     $pendingReplenish = (int)($pdo->query("SELECT COUNT(*) as cnt FROM replenish_requests WHERE status = 'PENDING'")->fetch()['cnt'] ?? 0);
     $completedReplenish = (int)($pdo->query("SELECT COUNT(*) as cnt FROM replenish_requests WHERE status = 'COMPLETED'")->fetch()['cnt'] ?? 0);
     $lowStockCount = (int)($pdo->query("SELECT COUNT(*) as cnt FROM stock_master WHERE qty_gudang_kecil <= 5")->fetch()['cnt'] ?? 0);
+    $minusStockCount = (int)($pdo->query("SELECT COUNT(*) as cnt FROM stock_master WHERE qty_gudang_kecil < 0")->fetch()['cnt'] ?? 0);
+    $emptyStockCount = (int)($pdo->query("SELECT COUNT(*) as cnt FROM stock_master WHERE qty_gudang_kecil = 0")->fetch()['cnt'] ?? 0);
 
     jsonResp([
         'status' => 'success',
@@ -657,7 +732,9 @@ if ($action === 'get_dashboard_stats') {
             'total_racks' => $totalRacks,
             'pending_replenish' => $pendingReplenish,
             'completed_replenish' => $completedReplenish,
-            'low_stock_count' => $lowStockCount
+            'low_stock_count' => $lowStockCount,
+            'minus_stock_count' => $minusStockCount,
+            'empty_stock_count' => $emptyStockCount
         ]
     ]);
 }

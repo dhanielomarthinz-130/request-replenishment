@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=4.0">
+  <link rel="stylesheet" href="style.css?v=4.2">
 </head>
 <body>
 
@@ -458,6 +458,12 @@
             <span class="portal-badge-sm">13</span>
           </button>
 
+          <button class="portal-nav-btn" data-tab="tabMinusStock">
+            <span class="nav-icon"><i class="fa-solid fa-arrow-trend-down"></i></span>
+            <span class="nav-text">Stok Minus Gudang Kecil</span>
+            <span class="portal-badge danger" id="badgeMinusCount">0</span>
+          </button>
+
           <button class="portal-nav-btn" data-tab="tabUsers">
             <span class="nav-icon"><i class="fa-solid fa-users-gear"></i></span>
             <span class="nav-text">Manajemen User</span>
@@ -491,13 +497,9 @@
           </div>
 
           <div class="topbar-actions ieg-topbar-actions">
-            <button class="btn-topbar-action outline" onclick="openSyncProgressModal()" title="Sync Full Stok">
-              <i class="fa-solid fa-rotate"></i>
-              <span>Sync Stok OCS</span>
-            </button>
-            <button class="btn-topbar-action outline" onclick="openSyncSkuRackModal()" title="Sync SKU-Rack">
+            <button class="btn-topbar-action outline" onclick="runFullOcsSync()" title="Sync SKU-Rack + Stok OCS sekaligus">
               <i class="fa-solid fa-cloud-arrow-down"></i>
-              <span>Sync SKU-Rack</span>
+              <span>Sync Data OCS</span>
             </button>
             <button class="btn-topbar-action primary" onclick="openModalAddRack()">
               <i class="fa-solid fa-plus"></i>
@@ -545,7 +547,7 @@
                 <span class="pink-accent-bar"></span>
                 <h3>Modul Tersedia</h3>
               </div>
-              <span class="module-counter-text">5 Menu Utama</span>
+              <span class="module-counter-text">6 Menu Utama</span>
             </div>
 
             <!-- Module Grid Cards (Matching Screenshot 1) -->
@@ -585,11 +587,18 @@
                 <h4>Manajemen User</h4>
               </div>
 
-              <div class="ieg-module-card" onclick="openSyncProgressModal()">
+              <div class="ieg-module-card" onclick="switchAdminTab('tabMinusStock')">
+                <div class="module-icon-box danger-gradient">
+                  <i class="fa-solid fa-arrow-trend-down"></i>
+                </div>
+                <h4>Stok Minus Gudang Kecil</h4>
+              </div>
+
+              <div class="ieg-module-card" onclick="runFullOcsSync()">
                 <div class="module-icon-box">
                   <i class="fa-solid fa-cloud-arrow-down"></i>
                 </div>
-                <h4>Sync OCS Live</h4>
+                <h4>Sync Data OCS</h4>
               </div>
             </div>
 
@@ -736,9 +745,9 @@
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
                   </button>
-                  <button class="btn-toolbar-btn outline" onclick="openSyncSkuRackModal()" title="Sync pemetaan lokasi dari OCS Cloud">
+                  <button class="btn-toolbar-btn outline" onclick="runFullOcsSync()" title="Sync SKU-Rack + Stok OCS sekaligus">
                     <i class="fa-solid fa-cloud-arrow-down"></i>
-                    <span>Sync OCS</span>
+                    <span>Sync Data OCS</span>
                   </button>
                   <button class="btn-toolbar-btn primary" onclick="openModalAddRack()">
                     <i class="fa-solid fa-plus"></i>
@@ -751,12 +760,12 @@
                 <table class="table-clean">
                   <thead>
                     <tr>
+                      <th>SKU Barang</th>
+                      <th>Nama Produk</th>
+                      <th>Barcode</th>
+                      <th>Kategori</th>
                       <th>Bin Code</th>
                       <th>Nama Rak / Lokasi</th>
-                      <th>SKU Barang</th>
-                      <th>Barcode</th>
-                      <th>Nama Produk</th>
-                      <th>Kategori</th>
                       <th>Dibuat</th>
                       <th class="td-center">Aksi</th>
                     </tr>
@@ -841,9 +850,9 @@
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
                   </button>
-                  <button class="btn-toolbar-btn primary" onclick="openSyncProgressModal()">
-                    <i class="fa-solid fa-arrows-rotate"></i>
-                    <span>Sync Full Stok OCS</span>
+                  <button class="btn-toolbar-btn primary" onclick="runFullOcsSync()">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <span>Sync Data OCS</span>
                   </button>
                 </div>
               </div>
@@ -872,7 +881,84 @@
             </div>
           </section>
 
-          <!-- TAB 5: USERS -->
+          <!-- TAB 5: STOK MINUS GUDANG KECIL -->
+          <section id="tabMinusStock" class="portal-tab-pane">
+            <div class="minus-stock-summary" id="minusStockSummary">
+              <div class="minus-summary-card danger">
+                <div class="minus-summary-icon"><i class="fa-solid fa-arrow-trend-down"></i></div>
+                <div>
+                  <span class="minus-summary-value" id="minusCountNegative">0</span>
+                  <span class="minus-summary-label">SKU Stok Minus (&lt; 0)</span>
+                </div>
+              </div>
+              <div class="minus-summary-card amber">
+                <div class="minus-summary-icon"><i class="fa-solid fa-box-open"></i></div>
+                <div>
+                  <span class="minus-summary-value" id="minusCountZero">0</span>
+                  <span class="minus-summary-label">SKU Kosong (= 0)</span>
+                </div>
+              </div>
+              <div class="minus-summary-card indigo">
+                <div class="minus-summary-icon"><i class="fa-solid fa-list-check"></i></div>
+                <div>
+                  <span class="minus-summary-value" id="minusCountRows">0</span>
+                  <span class="minus-summary-label">Baris Ditampilkan</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-white">
+              <div class="table-toolbar">
+                <div class="toolbar-left-group">
+                  <div class="search-input-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="searchMinusStock" placeholder="Cari SKU, Barcode, Nama Produk, Bin Code...">
+                  </div>
+                  <div class="toolbar-stats-hint">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Menampilkan stok Gudang Kecil yang minus / habis</span>
+                  </div>
+                </div>
+                <div class="toolbar-btns">
+                  <div class="status-filter-pills" id="minusThresholdFilters">
+                    <button class="pill-filter active" data-threshold="0">Minus &amp; Kosong</button>
+                    <button class="pill-filter" data-threshold="-1">Hanya Minus</button>
+                    <button class="pill-filter" data-threshold="5">&le; 5 Pcs</button>
+                  </div>
+                  <button class="btn-toolbar-btn outline" onclick="loadMinusStock()" title="Muat ulang data">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Refresh</span>
+                  </button>
+                  <button class="btn-toolbar-btn primary" onclick="runFullOcsSync()">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <span>Sync Data OCS</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="table-clean-wrapper">
+                <table class="table-clean">
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>Nama Produk</th>
+                      <th>Barcode</th>
+                      <th>Bin Code / Rak</th>
+                      <th class="td-right">Gudang Kecil</th>
+                      <th class="td-right">Gudang Besar</th>
+                      <th class="td-right">On Hand</th>
+                      <th>Update Terakhir</th>
+                    </tr>
+                  </thead>
+                  <tbody id="minusStockTableBody">
+                    <tr><td colspan="8" class="td-center">Memuat data stok minus...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- TAB 6: USERS -->
           <section id="tabUsers" class="portal-tab-pane">
             <div class="card-white">
               <div class="table-toolbar">
@@ -1057,6 +1143,6 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=4.2"></script>
 </body>
 </html>
