@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=4.3">
+  <link rel="stylesheet" href="style.css?v=5.1.0">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -40,6 +40,195 @@
   <style>
     html.has-auth-session #viewLogin {
       display: none !important;
+    }
+
+    /* Mobile App Clean Layout & Task Pick Styling */
+    .mobile-tab-view.active {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 1rem !important;
+    }
+    .pick-tasks-card {
+      background: #ffffff !important;
+      border-radius: 16px !important;
+      padding: 1.15rem !important;
+      border: 1px solid #e2e8f0 !important;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.85rem !important;
+    }
+    .pick-tasks-header-row {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      margin-bottom: 0.25rem !important;
+    }
+    .pick-header-title-box {
+      display: flex !important;
+      align-items: center !important;
+      gap: 0.75rem !important;
+    }
+    .pick-header-icon-badge {
+      width: 42px !important;
+      height: 42px !important;
+      border-radius: 12px !important;
+      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+      color: #ffffff !important;
+      display: grid !important;
+      place-items: center !important;
+      font-size: 1.2rem !important;
+      box-shadow: 0 4px 12px rgba(234, 88, 12, 0.3) !important;
+      flex-shrink: 0 !important;
+    }
+    .pick-heading-title {
+      font-size: 1.05rem !important;
+      font-weight: 800 !important;
+      color: #0f172a !important;
+      margin: 0 !important;
+      line-height: 1.25 !important;
+    }
+    .pick-heading-subtitle {
+      font-size: 0.73rem !important;
+      color: #64748b !important;
+      margin: 0.15rem 0 0 !important;
+    }
+    .btn-refresh-task {
+      padding: 0.45rem 0.75rem !important;
+      background: #f8fafc !important;
+      border: 1px solid #e2e8f0 !important;
+      border-radius: 9px !important;
+      font-size: 0.75rem !important;
+      font-weight: 700 !important;
+      color: #475569 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 0.35rem !important;
+      flex-shrink: 0 !important;
+      font-family: inherit !important;
+    }
+    .btn-refresh-task:hover {
+      background: #f1f5f9 !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+    .live-sync-indicator {
+      display: flex !important;
+      align-items: center !important;
+      gap: 0.5rem !important;
+      padding: 0.5rem 0.8rem !important;
+      background: #f0fdf4 !important;
+      border: 1px solid #bbf7d0 !important;
+      border-radius: 10px !important;
+      font-size: 0.74rem !important;
+      color: #15803d !important;
+    }
+    .live-sync-indicator .pulse-dot {
+      width: 8px !important;
+      height: 8px !important;
+      border-radius: 50% !important;
+      background: #22c55e !important;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7) !important;
+      animation: pulse-green 2s infinite !important;
+      flex-shrink: 0 !important;
+    }
+    .pick-status-filters {
+      display: flex !important;
+      gap: 0.45rem !important;
+      overflow-x: auto !important;
+      padding-bottom: 0.15rem !important;
+      scrollbar-width: none !important;
+    }
+    .pick-status-filters::-webkit-scrollbar {
+      display: none !important;
+    }
+    .pick-filter-chip {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 0.45rem !important;
+      padding: 0.45rem 0.85rem !important;
+      border-radius: 9999px !important;
+      background: #f8fafc !important;
+      border: 1.5px solid #e2e8f0 !important;
+      color: #475569 !important;
+      font-size: 0.76rem !important;
+      font-weight: 700 !important;
+      cursor: pointer !important;
+      white-space: nowrap !important;
+      font-family: inherit !important;
+      transition: all 0.15s ease !important;
+    }
+    .pick-filter-chip:hover {
+      background: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+    .pick-filter-chip.active {
+      background: #0f172a !important;
+      border-color: #0f172a !important;
+      color: #ffffff !important;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+    }
+    .pick-filter-chip .chip-count {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-width: 18px !important;
+      height: 18px !important;
+      padding: 0 5px !important;
+      background: #ef4444 !important;
+      color: #ffffff !important;
+      border-radius: 9999px !important;
+      font-size: 0.68rem !important;
+      font-weight: 800 !important;
+      line-height: 1 !important;
+    }
+    .pick-filter-chip .chip-count.completed {
+      background: #10b981 !important;
+    }
+    .pick-filter-chip.active .chip-count {
+      background: #ffffff !important;
+      color: #0f172a !important;
+    }
+    .search-field-pill {
+      display: flex !important;
+      align-items: center !important;
+      background: #f1f5f9 !important;
+      border-radius: 10px !important;
+      padding: 0.75rem 0.85rem !important;
+      gap: 0.5rem !important;
+      border: 1px solid #e2e8f0 !important;
+    }
+    .search-field-pill input {
+      flex: 1 !important;
+      border: none !important;
+      outline: none !important;
+      background: transparent !important;
+      font-size: 0.88rem !important;
+      color: #0f172a !important;
+      font-family: inherit !important;
+    }
+    .warehouse-badge.clickable {
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 0.4rem !important;
+      padding: 0.28rem 0.65rem !important;
+      border-radius: 9999px !important;
+      font-size: 0.75rem !important;
+      font-weight: 700 !important;
+      margin-top: 0.2rem !important;
+    }
+    .warehouse-badge.gudang-besar {
+      background: rgba(234, 88, 12, 0.12) !important;
+      color: #c2410c !important;
+      border: 1px solid rgba(234, 88, 12, 0.3) !important;
+    }
+    .warehouse-badge.gudang-kecil {
+      background: rgba(37, 99, 235, 0.12) !important;
+      color: #1d4ed8 !important;
+      border: 1px solid rgba(37, 99, 235, 0.3) !important;
     }
   </style>
 </head>
@@ -385,23 +574,28 @@
         <!-- TAB 2: TASK PICK GUDANG BESAR (OPERATOR GUDANG BESAR) -->
         <section id="opTabPickTask" class="mobile-tab-view">
           <div class="pick-tasks-card">
-            <div class="pick-tasks-header">
-              <div class="pick-title-group">
-                <div class="pick-header-icon"><i class="fa-solid fa-cart-flatbed"></i></div>
+
+            <!-- Card Header: Title, Subtitle, and Refresh -->
+            <div class="pick-tasks-header-row">
+              <div class="pick-header-title-box">
+                <div class="pick-header-icon-badge">
+                  <i class="fa-solid fa-cart-flatbed"></i>
+                </div>
                 <div>
-                  <h3 class="pick-heading">Task Pick Gudang Besar</h3>
-                  <p class="pick-subheading">Daftar permintaan replenish dari Operator Gudang Kecil</p>
+                  <h3 class="pick-heading-title">Task Pick Gudang Besar</h3>
+                  <p class="pick-heading-subtitle">Daftar permintaan replenish dari Operator Gudang Kecil</p>
                 </div>
               </div>
-              <button type="button" class="btn-clean-refresh" onclick="loadPickTasks()" title="Muat Ulang Task">
+              <button type="button" class="btn-refresh-task" onclick="loadPickTasks()" title="Muat Ulang Task">
                 <i class="fa-solid fa-rotate"></i>
+                <span>Refresh</span>
               </button>
             </div>
 
             <!-- Live Realtime Sync Status Indicator -->
             <div class="live-sync-indicator" id="liveSyncStatus">
               <span class="pulse-dot"></span>
-              <span class="live-sync-text">Auto-Sync Aktif: Request dari Gudang Kecil otomatis masuk tanpa reload</span>
+              <span class="live-sync-text"><strong>Auto-Sync Aktif:</strong> Request baru otomatis masuk tanpa reload</span>
             </div>
 
             <!-- Floating New Task Arrived Alert Banner -->
@@ -414,6 +608,12 @@
                 </div>
               </div>
               <span class="banner-btn-action">Lihat <i class="fa-solid fa-arrow-down"></i></span>
+            </div>
+
+            <!-- Search Field Pill (Standard Clean Mobile Input) -->
+            <div class="search-field-pill">
+              <i class="fa-solid fa-magnifying-glass" style="color: #94a3b8;"></i>
+              <input type="text" id="inputSearchPickTasks" placeholder="Cari SKU, Nama Barang, atau No. Request..." oninput="searchPickTasks(this.value)">
             </div>
 
             <!-- Task Status Filters -->
@@ -434,16 +634,11 @@
               </button>
             </div>
 
-            <!-- Search input inside Task Pick -->
-            <div class="pick-search-bar">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="inputSearchPickTasks" placeholder="Cari SKU, Nama Barang, atau No. Request..." oninput="searchPickTasks(this.value)">
-            </div>
-
             <!-- Task Cards List Feed -->
             <div class="pick-tasks-feed" id="pickTasksFeed">
               <div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat antrean task pick...</div>
             </div>
+
           </div>
         </section>
 
@@ -1437,7 +1632,7 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=4.4"></script>
+  <script src="app.js?v=5.1.0"></script>
 </body>
 
 </html>
