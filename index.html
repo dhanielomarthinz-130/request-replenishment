@@ -399,17 +399,6 @@
           </div>
         </div>
 
-        <!-- User Profile Card in Sidebar (Matching Screenshot 1) -->
-        <div class="ieg-sidebar-user-card">
-          <div class="ieg-user-avatar-pill">
-            <span>A</span>
-          </div>
-          <div class="ieg-user-text">
-            <strong id="adminUserName">ADMIN</strong>
-            <small>@ ADMIN</small>
-          </div>
-        </div>
-
         <nav class="portal-nav ieg-nav">
           <button class="portal-nav-btn active" data-tab="tabDashboard">
             <span class="nav-icon"><i class="fa-solid fa-house"></i></span>
@@ -448,9 +437,13 @@
 
         <div class="portal-user-footer ieg-footer">
           <div class="user-block">
-            <div class="status-pulse-dot"></div>
-            <div class="user-details">
-              <span class="role-pill">OCS Cloud Connected</span>
+            <div class="ieg-user-avatar-pill">
+              <span id="adminAvatarLetter">A</span>
+              <span class="user-online-dot"></span>
+            </div>
+            <div class="ieg-user-text">
+              <strong id="adminUserName">ADMIN</strong>
+              <small id="adminUserRole">@ADMIN</small>
             </div>
           </div>
           <button class="btn-portal-logout" onclick="logoutApp()" title="Keluar dari Akun">

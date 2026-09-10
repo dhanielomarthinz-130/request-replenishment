@@ -162,7 +162,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (viewName === 'admin') {
             viewAdmin.classList.add('active');
             if (AppState.user) {
-                adminUserName.textContent = AppState.user.full_name || AppState.user.username;
+                const displayName = AppState.user.full_name || AppState.user.username || 'ADMIN';
+                if (adminUserName) adminUserName.textContent = displayName;
+                const adminAvatarLetter = document.getElementById('adminAvatarLetter');
+                if (adminAvatarLetter) adminAvatarLetter.textContent = displayName.charAt(0).toUpperCase();
+                const adminUserRole = document.getElementById('adminUserRole');
+                if (adminUserRole) adminUserRole.textContent = '@' + (AppState.user.username || 'ADMIN').toUpperCase();
             }
             loadDashboardStats();
             loadSkuRacks();
