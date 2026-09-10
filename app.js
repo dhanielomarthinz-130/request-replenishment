@@ -1331,7 +1331,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr>
                     <td><strong>${r.request_no}</strong></td>
                     <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
-                    <td><strong>${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
+                    <td class="col-sku"><strong class="sku-tag" style="color: #0f172a; white-space: nowrap; display: inline-block;">${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
                     <td><strong style="color: var(--primary); font-family: var(--font-mono); font-size: 1rem;">${r.qty_request} Pcs</strong></td>
                     <td><span style="font-weight: 600;">${r.requested_by}</span></td>
                     <td><span class="badge-status ${statusClass}">${r.status}</span></td>
@@ -1417,7 +1417,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return `
             <tr>
-                <td><code>${sku}</code></td>
+                <td class="col-sku"><code style="white-space: nowrap;">${sku}</code></td>
                 <td><strong style="color: #0f172a;">${r.product_name}</strong></td>
                 <td><span style="font-family: var(--font-mono); font-size: 0.82rem; color: #475569;">${r.barcode || '-'}</span></td>
                 <td><span style="background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600;">${r.category || 'General'}</span></td>
@@ -1589,7 +1589,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><strong>${r.request_no}</strong></td>
                     <td><small style="color: var(--text-muted); font-family: var(--font-mono);">${(r.created_at || '').substring(0, 16)}</small></td>
                     <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
-                    <td><strong style="color: #0f172a;">${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
+                    <td class="col-sku"><strong class="sku-tag" style="color: #0f172a; white-space: nowrap; display: inline-block;">${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
                     <td class="td-right"><strong style="font-size: 1.05rem; color: var(--primary); font-family: var(--font-mono);">${r.qty_request} Pcs</strong></td>
                     <td class="td-right"><span class="stock-pill default" style="font-family: var(--font-mono); font-weight: 700; font-size: 0.92rem; padding: 0.25rem 0.55rem; border-radius: 6px; background: rgba(59, 130, 246, 0.08); color: #1d4ed8; border: 1px solid rgba(59, 130, 246, 0.2);">${r.qty_gudang_besar ?? 0} Pcs</span></td>
                     <td><span style="font-weight: 600;">${r.requested_by}</span></td>
@@ -1667,7 +1667,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         stockMasterTableBody.innerHTML = items.map(s => `
             <tr>
-                <td><code>${s.sku}</code></td>
+                <td class="col-sku"><code style="white-space: nowrap;">${s.sku}</code></td>
                 <td><span style="font-family: var(--font-mono); font-size: 0.8rem; color: #475569;">${s.barcode || '-'}</span></td>
                 <td><strong style="color: #0f172a;">${s.product_name}</strong></td>
                 <td>${s.bin_code ? `<span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</span>` : '<span style="color: var(--text-muted);">-</span>'}</td>
@@ -1722,7 +1722,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return `
                 <tr>
-                    <td><code>${s.sku}</code></td>
+                    <td class="col-sku"><code style="white-space: nowrap;">${s.sku}</code></td>
                     <td><strong style="color: #0f172a;">${s.product_name || '-'}</strong></td>
                     <td><span style="font-family: var(--font-mono); font-size: 0.82rem; color: #475569;">${s.barcode || '-'}</span></td>
                     <td>${binLabel}</td>

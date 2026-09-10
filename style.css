@@ -1863,6 +1863,8 @@ body {
   font-size: 0.82rem;
   font-weight: 700;
   color: #0f172a;
+  white-space: nowrap !important;
+  display: inline-block;
 }
 .td-center { text-align: center; }
 .td-right { text-align: right; }
@@ -3088,23 +3090,41 @@ body {
   margin-right: 0.4rem;
 }
 
-/* Master SKU-Rack column sizing - stop the product name wrapping into a
-   six-line block while Kategori/Bin Code sit half empty. */
+/* Master SKU-Rack column sizing - keep SKU no-wrap */
 #tabSkuRacks .table-clean th:nth-child(1),
-#tabSkuRacks .table-clean td:nth-child(1) { width: 14%; }
+#tabSkuRacks .table-clean td:nth-child(1) { white-space: nowrap !important; }
 #tabSkuRacks .table-clean th:nth-child(2),
-#tabSkuRacks .table-clean td:nth-child(2) { width: 26%; min-width: 240px; }
+#tabSkuRacks .table-clean td:nth-child(2) { min-width: 240px; }
 #tabSkuRacks .table-clean th:nth-child(3),
-#tabSkuRacks .table-clean td:nth-child(3) { width: 12%; }
+#tabSkuRacks .table-clean td:nth-child(3) { white-space: nowrap !important; }
 #tabSkuRacks .table-clean th:nth-child(4),
-#tabSkuRacks .table-clean td:nth-child(4) { width: 11%; }
+#tabSkuRacks .table-clean td:nth-child(4) { white-space: nowrap !important; }
 #tabSkuRacks .table-clean th:nth-child(5),
-#tabSkuRacks .table-clean td:nth-child(5) { width: 14%; }
-#tabSkuRacks .table-clean th:nth-child(6),
-#tabSkuRacks .table-clean td:nth-child(6) { width: 14%; }
+#tabSkuRacks .table-clean td:nth-child(5) { white-space: nowrap !important; }
 
+#tabMinusStock .table-clean th:nth-child(1),
+#tabMinusStock .table-clean td:nth-child(1) { white-space: nowrap !important; }
 #tabMinusStock .table-clean th:nth-child(2),
 #tabMinusStock .table-clean td:nth-child(2) { min-width: 230px; }
+
+/* No wrap for SKU columns across all tables */
+.col-sku,
+.table-clean th.col-sku,
+.table-clean td.col-sku,
+#tabStocks .table-clean th:nth-child(1),
+#tabStocks .table-clean td:nth-child(1),
+#tabReplenish .table-clean td:nth-child(4) strong,
+#dashReplenishTableBody td:nth-child(3) strong,
+.sku-no-wrap,
+.sku-tag {
+  white-space: nowrap !important;
+}
+
+#tabReplenish .table-clean td:nth-child(4) strong,
+#dashReplenishTableBody td:nth-child(3) strong {
+  display: inline-block;
+  white-space: nowrap !important;
+}
 
 /* --------------------------------------------------------------------------
    C. WORKFLOW REPLENISH GUDANG KECIL & GUDANG BESAR ADDITIONS
