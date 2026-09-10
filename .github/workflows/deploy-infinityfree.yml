@@ -46,9 +46,8 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           port: 21
-          # InfinityFree menaruh document root di /htdocs/. Kalau akun Anda
-          # memakai subfolder, tambahkan secret FTP_SERVER_DIR (mis. /htdocs/wms/).
-          server-dir: ${{ secrets.FTP_SERVER_DIR || '/htdocs/' }}
+          # InfinityFree menaruh document root domain requestreplenishment.page.gd di folder ini:
+          server-dir: /requestreplenishment.page.gd/htdocs/
           dangerous-clean-slate: false
           exclude: |
             **/.git*
