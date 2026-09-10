@@ -449,12 +449,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tabId === 'opTabScan') {
             setTimeout(() => inputBinCode && inputBinCode.focus(), 200);
+            loadOperatorHistory();
         } else if (tabId === 'opTabPickTask') {
             loadPickTasks();
         } else if (tabId === 'opTabStockSearch') {
             loadOpStockSearchList();
         } else if (tabId === 'opTabHistory') {
-            loadOperatorHistory();
+            switchMobileTab('opTabScan');
+            return;
         }
     };
 
@@ -753,56 +755,65 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.loadOperatorHistory = async function() {
-        if (!operatorHistoryList) return;
+        const historyContainer = document.getElementById('operatorHistoryList');
+        if (!historyContainer) return;
         try {
-            const userName = AppState.user ? AppState.user.full_name : '';
-            const res = await fetch(`api.php?action=get_replenish_requests&requested_by=${encodeURIComponent(userName)}&limit=10`);
+            const res = await fetch(`api.php?action=get_replenish_requests&status=COMPLETED&today=1&limit=50`);
             const json = await res.json();
 
-            if (json.status === 'success' && json.data.length > 0) {
+            if (json.status === 'success' && json.data && json.data.length > 0) {
                 if (opStatsToday) opStatsToday.textContent = json.data.length;
-                if (opStatsCompleted) opStatsCompleted.textContent = json.data.filter(r => r.status === 'COMPLETED').length;
+                const totalPcs = json.data.reduce((acc, r) => acc + (parseInt(r.picked_qty || r.qty_request) || 0), 0);
+                if (opStatsCompleted) opStatsCompleted.textContent = totalPcs + ' Pcs';
 
                 const historyHtml = json.data.map(req => {
-                    const statusClass = (req.status || 'PENDING').toLowerCase();
-                    const statusLabel = {
-                        'PENDING': 'Menunggu',
-                        'APPROVED': 'Disetujui',
-                        'COMPLETED': 'Selesai',
-                        'REJECTED': 'Ditolak'
-                    }[req.status] || req.status;
-
-                    let pickMeta = '';
-                    if (req.status === 'COMPLETED' && (req.rack_gudang_besar || req.batch_number)) {
-                        pickMeta = `
-                            <div style="font-size: 0.72rem; color: #059669; margin-top: 0.2rem; display: flex; gap: 0.4rem; flex-wrap: wrap;">
-                                <span><i class="fa-solid fa-warehouse"></i> Rak: <strong>${req.rack_gudang_besar || '-'}</strong></span>
-                                <span><i class="fa-solid fa-barcode"></i> Batch: <strong>${req.batch_number || '-'}</strong></span>
-                            </div>
-                        `;
-                    }
+                    const rack = req.rack_gudang_besar || '-';
+                    const batch = req.batch_number || '-';
+                    const pickedQty = req.picked_qty || req.qty_request;
+                    const timeStr = (req.picked_at || req.created_at || '').substring(11, 16);
 
                     return `
-                        <div class="feed-item">
-                            <div>
-                                <strong>${req.sku} (${req.bin_code})</strong>
-                                <small>${req.product_name} • ${req.qty_request} Pcs</small>
-                                ${pickMeta}
+                        <div class="feed-item" style="border-left: 3.5px solid #10b981; background: #ffffff; padding: 0.85rem 1rem; margin-bottom: 0.65rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                        <strong style="color: #0f172a; font-size: 0.88rem;">${req.sku}</strong>
+                                        <span class="loc-bin-tag" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"><i class="fa-solid fa-tag"></i> ${req.bin_code}</span>
+                                    </div>
+                                    <span class="badge-status completed" style="font-size: 0.7rem; padding: 0.2rem 0.55rem;"><i class="fa-solid fa-circle-check"></i> Selesai Dipick</span>
+                                </div>
+                                <div style="font-size: 0.78rem; color: #475569; margin-bottom: 0.45rem; font-weight: 500; line-height: 1.35;">
+                                    ${req.product_name}
+                                </div>
+                                <div style="display: flex; gap: 0.6rem; font-size: 0.74rem; color: #334155; flex-wrap: wrap; background: #f8fafc; padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                    <span><i class="fa-solid fa-boxes-stacked" style="color: var(--primary);"></i> Qty: <strong style="color: var(--primary);">${pickedQty} Pcs</strong></span>
+                                    <span><i class="fa-solid fa-warehouse" style="color: #ea580c;"></i> Rak GB: <strong style="color: #c2410c;">${rack}</strong></span>
+                                    <span><i class="fa-solid fa-barcode" style="color: #4f46e5;"></i> Batch: <strong style="color: #4338ca;">${batch}</strong></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.4rem; font-size: 0.7rem; color: #94a3b8;">
+                                    <span><i class="fa-solid fa-user-check" style="color: #10b981;"></i> Di-pick: <strong>${req.picked_by || req.processed_by || 'Operator Gudang'}</strong></span>
+                                    <span><i class="fa-regular fa-clock"></i> ${timeStr} WIB</span>
+                                </div>
                             </div>
-                            <span class="badge-status ${statusClass}">${statusLabel}</span>
                         </div>
                     `;
                 }).join('');
 
-                operatorHistoryList.innerHTML = historyHtml;
-                const fullList = document.getElementById('operatorFullHistoryList');
-                if (fullList) fullList.innerHTML = historyHtml;
+                historyContainer.innerHTML = historyHtml;
             } else {
-                operatorHistoryList.innerHTML = `<div class="empty-feed">Belum ada pengajuan replenish hari ini.</div>`;
-                const fullList = document.getElementById('operatorFullHistoryList');
-                if (fullList) fullList.innerHTML = `<div class="empty-feed">Belum ada data riwayat.</div>`;
+                if (opStatsToday) opStatsToday.textContent = '0';
+                if (opStatsCompleted) opStatsCompleted.textContent = '0 Pcs';
+                historyContainer.innerHTML = `
+                    <div class="empty-feed" style="text-align: center; padding: 1.5rem 1rem; color: #94a3b8;">
+                        <i class="fa-solid fa-clipboard-check" style="font-size: 1.8rem; color: #cbd5e1; display: block; margin-bottom: 0.5rem;"></i>
+                        <strong style="color: #64748b; font-size: 0.85rem; display: block;">Belum ada request selesai dipick hari ini</strong>
+                        <span style="font-size: 0.75rem;">Request yang telah selesai dipick oleh Gudang Besar akan langsung tampil di sini.</span>
+                    </div>
+                `;
             }
-        } catch (err) {}
+        } catch (err) {
+            console.error('loadOperatorHistory error:', err);
+        }
     };
 
     // =========================================================================
@@ -1532,13 +1543,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderAdminReplenishTable(json.data);
             }
         } catch (err) {
-            adminReplenishTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4 text-danger">Gagal memuat: ${err.message}</td></tr>`;
+            adminReplenishTableBody.innerHTML = `<tr><td colspan="11" class="td-center py-4 text-danger">Gagal memuat: ${err.message}</td></tr>`;
         }
     };
 
     function renderAdminReplenishTable(items) {
         if (!items || items.length === 0) {
-            adminReplenishTableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Tidak ada data permintaan replenish yang ditemukan.</td></tr>`;
+            adminReplenishTableBody.innerHTML = `<tr><td colspan="11" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>Tidak ada data permintaan replenish yang ditemukan.</td></tr>`;
             return;
         }
 
@@ -1580,6 +1591,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
                     <td><strong style="color: #0f172a;">${r.sku}</strong><br><small style="color: var(--text-muted);">${r.product_name}</small></td>
                     <td class="td-right"><strong style="font-size: 1.05rem; color: var(--primary); font-family: var(--font-mono);">${r.qty_request} Pcs</strong></td>
+                    <td class="td-right"><span class="stock-pill default" style="font-family: var(--font-mono); font-weight: 700; font-size: 0.92rem; padding: 0.25rem 0.55rem; border-radius: 6px; background: rgba(59, 130, 246, 0.08); color: #1d4ed8; border: 1px solid rgba(59, 130, 246, 0.2);">${r.qty_gudang_besar ?? 0} Pcs</span></td>
                     <td><span style="font-weight: 600;">${r.requested_by}</span></td>
                     <td>${rackBesarHtml}</td>
                     <td>${batchHtml}</td>

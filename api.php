@@ -376,21 +376,30 @@ if ($action === 'submit_replenish') {
 if ($action === 'get_replenish_requests') {
     $statusFilter = trim($input['status'] ?? '');
     $userFilter = trim($input['requested_by'] ?? '');
+    $today = !empty($input['today']) && ($input['today'] === '1' || $input['today'] === 'true');
     $limit = (int)($input['limit'] ?? 100);
 
-    $sql = "SELECT * FROM replenish_requests WHERE 1=1";
+    $sql = "SELECT r.*, COALESCE(NULLIF(r.qty_gudang_besar, 0), sm.qty_gudang_besar, 0) AS qty_gudang_besar 
+            FROM replenish_requests r 
+            LEFT JOIN stock_master sm ON UPPER(r.sku) = UPPER(sm.sku) 
+            WHERE 1=1";
     $params = [];
 
     if (!empty($statusFilter) && $statusFilter !== 'ALL') {
-        $sql .= " AND status = ?";
+        $sql .= " AND r.status = ?";
         $params[] = $statusFilter;
     }
     if (!empty($userFilter)) {
-        $sql .= " AND requested_by = ?";
+        $sql .= " AND r.requested_by = ?";
         $params[] = $userFilter;
     }
+    if ($today) {
+        $sql .= " AND (DATE(r.created_at) = ? OR DATE(r.picked_at) = ?)";
+        $params[] = date('Y-m-d');
+        $params[] = date('Y-m-d');
+    }
 
-    $sql .= " ORDER BY id DESC LIMIT $limit";
+    $sql .= " ORDER BY r.id DESC LIMIT $limit";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll();

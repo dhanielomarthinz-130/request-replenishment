@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=5.1.0">
+  <link rel="stylesheet" href="style.css?v=5.2.0">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -569,6 +569,28 @@
             </div>
           </div>
 
+          <!-- Riwayat Selesai Dipick Hari Ini (Tampil Langsung di Halaman Operator) -->
+          <div class="today-completed-card" style="margin-top: 1.25rem; background: #ffffff; border-radius: 16px; border: 1px solid rgba(226, 232, 240, 0.9); box-shadow: 0 4px 16px -4px rgba(15, 23, 42, 0.05); padding: 1.1rem; overflow: hidden;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding-bottom: 0.65rem; border-bottom: 1px solid #f1f5f9;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(16, 185, 129, 0.12); color: #059669; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">
+                  <i class="fa-solid fa-clock-rotate-left"></i>
+                </div>
+                <div>
+                  <h4 style="margin: 0; font-size: 0.92rem; font-weight: 700; color: #1e293b;">Riwayat Selesai Dipick</h4>
+                  <p style="margin: 0; font-size: 0.72rem; color: #64748b;">Hanya request selesai dipick hari ini</p>
+                </div>
+              </div>
+              <button type="button" class="btn-refresh-task" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;" onclick="loadOperatorHistory()" title="Perbarui Riwayat">
+                <i class="fa-solid fa-rotate"></i> <span>Refresh</span>
+              </button>
+            </div>
+            
+            <div class="requests-feed-list" id="operatorHistoryList">
+              <div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat riwayat...</div>
+            </div>
+          </div>
+
         </section>
 
         <!-- TAB 2: TASK PICK GUDANG BESAR (OPERATOR GUDANG BESAR) -->
@@ -656,20 +678,7 @@
           </div>
         </section>
 
-        <!-- TAB 4: REPLENISH HISTORY FULL (MOBILE) -->
-        <section id="opTabHistory" class="mobile-tab-view">
-          <div class="history-full-card">
-            <div class="card-header-flex">
-              <h4><i class="fa-solid fa-list-check"></i> Riwayat Semua Pengajuan</h4>
-              <button class="link-btn" onclick="loadOperatorHistory()">Refresh</button>
-            </div>
-            <div class="requests-feed-list" id="operatorFullHistoryList">
-              <div class="empty-feed">Belum ada data.</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- TAB 5: OPERATOR PROFILE (MOBILE) -->
+        <!-- TAB 4: OPERATOR PROFILE (MOBILE) -->
         <section id="opTabProfile" class="mobile-tab-view">
           <div class="profile-mobile-card">
             <div class="profile-big-avatar">
@@ -681,11 +690,11 @@
             <div class="profile-metrics-row">
               <div class="metric-box">
                 <strong id="opStatsToday">0</strong>
-                <span>Pengajuan Hari Ini</span>
+                <span>Selesai Dipick Hari Ini</span>
               </div>
               <div class="metric-box">
-                <strong id="opStatsCompleted" class="text-green">0</strong>
-                <span>Selesai Dimutasi</span>
+                <strong id="opStatsCompleted" class="text-green">0 Pcs</strong>
+                <span>Total Pcs Dimutasi</span>
               </div>
             </div>
 
@@ -713,7 +722,7 @@
 
       </main>
 
-      <!-- Native Mobile Bottom Tab Bar -->
+      <!-- Native Mobile Bottom Tab Bar (4 Main Navigation Items) -->
       <nav class="mobile-bottom-navbar">
         <button class="bottom-tab-item active" id="btnNavScan" onclick="switchMobileTab('opTabScan', this)">
           <i class="fa-solid fa-box-open"></i>
@@ -727,10 +736,6 @@
         <button class="bottom-tab-item" id="btnNavStockSearch" onclick="switchMobileTab('opTabStockSearch', this)">
           <i class="fa-solid fa-boxes-stacked"></i>
           <span>Cek Stok</span>
-        </button>
-        <button class="bottom-tab-item" id="btnNavHistory" onclick="switchMobileTab('opTabHistory', this)">
-          <i class="fa-solid fa-clock-rotate-left"></i>
-          <span>Riwayat</span>
         </button>
         <button class="bottom-tab-item" id="btnNavProfile" onclick="switchMobileTab('opTabProfile', this)">
           <i class="fa-solid fa-user"></i>
@@ -1156,6 +1161,7 @@
                       <th>Rak Gudang Kecil</th>
                       <th>SKU & Nama Produk</th>
                       <th class="td-right">Qty Diajukan</th>
+                      <th class="td-right">Qty Gudang Besar</th>
                       <th>Pemohon</th>
                       <th>Rak Gudang Besar</th>
                       <th>Batch Number</th>
@@ -1165,7 +1171,7 @@
                   </thead>
                   <tbody id="adminReplenishTableBody">
                     <tr>
-                      <td colspan="10" class="td-center">Memuat data permintaan...</td>
+                      <td colspan="11" class="td-center">Memuat data permintaan...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1632,7 +1638,7 @@
   <div id="toastContainer" class="toast-stack"></div>
 
   <!-- App Logic -->
-  <script src="app.js?v=5.1.0"></script>
+  <script src="app.js?v=5.2.0"></script>
 </body>
 
 </html>
