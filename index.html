@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=5.3.6">
+  <link rel="stylesheet" href="style.css?v=5.3.7">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -414,7 +414,10 @@
               <i class="fa-solid fa-qrcode lead-icon"></i>
               <input type="text" id="inputBinCode" class="scan-field"
                 placeholder="Scan / ketik Bin Code (cth: PL-17-01-01)..." autocomplete="off" autofocus>
-              <button type="button" id="btnClearScan" class="btn-clear-scan"><i class="fa-solid fa-xmark"></i></button>
+              <button type="button" id="btnClearScan" class="btn-clear-scan" title="Hapus"><i class="fa-solid fa-xmark"></i></button>
+              <button type="button" id="btnOpenScanCamera" class="btn-scan-camera" title="Buka Kamera Scan" onclick="openCameraScanner()">
+                <i class="fa-solid fa-camera"></i>
+              </button>
             </form>
           </div>
 
@@ -529,6 +532,11 @@
               <div class="radar-ping"></div>
             </div>
             <h3>Siap Scan Bin Code</h3>
+            <p class="scan-guide-subtext">Scan dengan scanner fisik PDA, ketik manual, atau buka kamera HP Anda.</p>
+            <button type="button" class="btn-open-camera-hero" onclick="openCameraScanner()">
+              <i class="fa-solid fa-camera"></i>
+              <span>Buka Kamera Scan</span>
+            </button>
           </div>
 
           <!-- Riwayat Selesai Direplenish Hari Ini -->
@@ -1826,11 +1834,83 @@
   </div>
 
 
+  <!-- ========================================================================= -->
+  <!-- MODAL: CAMERA LIVE BARCODE & QR SCANNER (OPERATOR) -->
+  <!-- ========================================================================= -->
+  <div id="modalCameraScanner" class="clean-modal-overlay camera-scanner-overlay">
+    <div class="camera-scanner-modal-box">
+      <!-- Modal Header -->
+      <div class="camera-modal-top-bar">
+        <div class="camera-title-wrap">
+          <div class="camera-icon-badge">
+            <i class="fa-solid fa-camera"></i>
+          </div>
+          <div>
+            <h4 class="camera-modal-heading">Scan Barcode / QR Rak</h4>
+            <span class="camera-modal-subtitle" id="cameraTargetHint">Arahkan kamera ke Bin Code lokasi rak</span>
+          </div>
+        </div>
+        <div class="camera-header-actions">
+          <button type="button" id="btnToggleTorch" class="cam-action-btn" onclick="toggleScannerTorch()" title="Flashlight / Senter" style="display: none;">
+            <i class="fa-solid fa-bolt"></i>
+          </button>
+          <button type="button" id="btnSwitchCamera" class="cam-action-btn" onclick="switchScannerCamera()" title="Ganti Kamera" style="display: none;">
+            <i class="fa-solid fa-camera-rotate"></i>
+          </button>
+          <button type="button" class="cam-action-btn close" onclick="closeCameraScanner()" title="Tutup Kamera">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Camera Stream Viewport -->
+      <div class="camera-viewport-container">
+        <div id="cameraScanViewport" class="camera-live-stream"></div>
+        
+        <!-- Animated Scanner Target Reticle & Laser -->
+        <div class="scanner-aim-frame">
+          <div class="aim-corner top-left"></div>
+          <div class="aim-corner top-right"></div>
+          <div class="aim-corner bottom-left"></div>
+          <div class="aim-corner bottom-right"></div>
+          <div class="scanner-red-laser"></div>
+        </div>
+
+        <!-- Camera Loading Overlay -->
+        <div id="cameraLoadingIndicator" class="camera-loading-state">
+          <div class="spinner-ios light"></div>
+          <span>Mempersiapkan kamera...</span>
+        </div>
+      </div>
+
+      <!-- Modal Bottom Bar -->
+      <div class="camera-modal-footer">
+        <div id="cameraErrorAlert" class="scanner-error-card" style="display: none;"></div>
+
+        <p class="camera-footer-tip">
+          <i class="fa-solid fa-circle-info"></i> Dukungan: QR Code, Code 128, Code 39, EAN, UPC & label rak OCS
+        </p>
+
+        <!-- Fallback Manual Input -->
+        <form class="camera-manual-input-row" onsubmit="submitManualCameraScan(event)">
+          <i class="fa-solid fa-keyboard input-icon"></i>
+          <input type="text" id="inputManualScanCode" placeholder="Atau ketik Bin Code (cth: PL-17-01-01)..." autocomplete="off">
+          <button type="submit" class="btn-manual-apply" title="Gunakan Kode">
+            <i class="fa-solid fa-check"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Alerts Container -->
   <div id="toastContainer" class="toast-stack"></div>
 
+  <!-- HTML5 QR & Barcode Scanner Library -->
+  <script src="html5-qrcode.min.js"></script>
+
   <!-- App Logic -->
-  <script src="app.js?v=5.3.6"></script>
+  <script src="app.js?v=5.3.7"></script>
 </body>
 
 </html>

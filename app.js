@@ -437,6 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.logoutApp = async function() {
+        if (window.closeCameraScanner) window.closeCameraScanner();
         stopPickTaskAutoPolling();
         writeCachedSession(null);
         try {
@@ -455,6 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
 
     window.switchMobileTab = function(tabId, btn) {
+        if (window.closeCameraScanner) window.closeCameraScanner();
         const effectiveWh = AppState.user ? ((AppState.user.work_location || AppState.user.role) === 'gudang_besar' ? 'gudang_besar' : 'gudang_kecil') : 'gudang_kecil';
         if (effectiveWh === 'gudang_besar' && tabId === 'opTabScan') {
             tabId = 'opTabPickTask';
@@ -648,6 +650,313 @@ document.addEventListener('DOMContentLoaded', () => {
             operatorLoadingSync.style.display = 'none';
         }
     }
+    window.executeBinScan = executeBinScan;
+
+    // =========================================================================
+    // 3A. CAMERA LIVE BARCODE & QR SCANNER (OPERATOR)
+    // =========================================================================
+    let html5QrScannerInstance = null;
+    let cameraScannerActive = false;
+    let activeCameraId = null;
+    let availableCamerasList = [];
+    let isTorchEnabled = false;
+    let cameraScanTargetInput = 'inputBinCode';
+    let cameraScanSuccessHandler = null;
+
+    const modalCameraScanner = document.getElementById('modalCameraScanner');
+    const cameraLoadingIndicator = document.getElementById('cameraLoadingIndicator');
+    const cameraErrorAlert = document.getElementById('cameraErrorAlert');
+    const btnToggleTorch = document.getElementById('btnToggleTorch');
+    const btnSwitchCamera = document.getElementById('btnSwitchCamera');
+    const inputManualScanCode = document.getElementById('inputManualScanCode');
+    const cameraTargetHint = document.getElementById('cameraTargetHint');
+
+    window.openCameraScanner = async function(targetInputId = 'inputBinCode', onSuccessCallback = null) {
+        cameraScanTargetInput = targetInputId || 'inputBinCode';
+        cameraScanSuccessHandler = onSuccessCallback || null;
+
+        if (cameraTargetHint) {
+            if (cameraScanTargetInput === 'inputPickRackBesar') {
+                cameraTargetHint.textContent = 'Scan barcode / QR lokasi rak Gudang Besar';
+            } else if (cameraScanTargetInput === 'inputPickBatchNumber') {
+                cameraTargetHint.textContent = 'Scan barcode batch number / lot produk';
+            } else {
+                cameraTargetHint.textContent = 'Arahkan kamera ke Bin Code lokasi rak';
+            }
+        }
+
+        if (inputManualScanCode) {
+            inputManualScanCode.value = '';
+        }
+        if (cameraErrorAlert) {
+            cameraErrorAlert.style.display = 'none';
+            cameraErrorAlert.textContent = '';
+        }
+        if (cameraLoadingIndicator) {
+            cameraLoadingIndicator.style.display = 'flex';
+        }
+        if (btnToggleTorch) {
+            btnToggleTorch.style.display = 'none';
+            btnToggleTorch.classList.remove('active');
+            isTorchEnabled = false;
+        }
+        if (btnSwitchCamera) {
+            btnSwitchCamera.style.display = 'none';
+        }
+
+        if (modalCameraScanner) {
+            modalCameraScanner.classList.add('active');
+        }
+
+        // Check library availability
+        if (typeof Html5Qrcode === 'undefined') {
+            if (cameraLoadingIndicator) cameraLoadingIndicator.style.display = 'none';
+            showCameraError('Library barcode scanner belum siap. Silakan refresh halaman.');
+            return;
+        }
+
+        // Browser mediaDevices check
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            if (cameraLoadingIndicator) cameraLoadingIndicator.style.display = 'none';
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                showCameraError('Akses kamera di browser memerlukan koneksi aman HTTPS atau localhost/127.0.0.1.');
+            } else {
+                showCameraError('Browser ini tidak mendukung akses kamera HTML5.');
+            }
+            return;
+        }
+
+        try {
+            await startCameraLiveFeed();
+        } catch (err) {
+            console.error('Failed to start camera:', err);
+            if (cameraLoadingIndicator) cameraLoadingIndicator.style.display = 'none';
+            showCameraError(formatCameraError(err));
+        }
+    };
+
+    function showCameraError(msg) {
+        if (cameraErrorAlert) {
+            cameraErrorAlert.style.display = 'block';
+            cameraErrorAlert.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${msg}`;
+        }
+        showToast(msg, 'error');
+    }
+
+    function formatCameraError(err) {
+        const str = (err && (err.message || err.name || String(err))) || '';
+        if (str.includes('NotAllowedError') || str.includes('Permission denied') || str.includes('PermissionDismissedError')) {
+            return 'Izin kamera ditolak. Mohon izinkan akses kamera di setelan browser Anda.';
+        }
+        if (str.includes('NotFoundError') || str.includes('DevicesNotFoundError')) {
+            return 'Kamera tidak ditemukan pada perangkat ini.';
+        }
+        if (str.includes('NotReadableError') || str.includes('TrackStartError')) {
+            return 'Kamera sedang digunakan oleh aplikasi lain.';
+        }
+        if (str.includes('OverconstrainedError')) {
+            return 'Parameter kamera tidak didukung oleh perangkat.';
+        }
+        return 'Gagal mengakses kamera: ' + (err.message || str || 'Terjadi kesalahan sistem.');
+    }
+
+    async function startCameraLiveFeed(preferredCameraId = null) {
+        if (cameraLoadingIndicator) cameraLoadingIndicator.style.display = 'flex';
+        if (cameraErrorAlert) cameraErrorAlert.style.display = 'none';
+
+        if (html5QrScannerInstance) {
+            try {
+                if (html5QrScannerInstance.isScanning) {
+                    await html5QrScannerInstance.stop();
+                }
+                await html5QrScannerInstance.clear();
+            } catch (e) {
+                console.warn('Cleanup old camera instance:', e);
+            }
+            html5QrScannerInstance = null;
+        }
+
+        html5QrScannerInstance = new Html5Qrcode('cameraScanViewport', {
+            verbose: false,
+            experimentalFeatures: {
+                useBarCodeDetectorIfSupported: true
+            }
+        });
+
+        // Enumerate cameras
+        try {
+            availableCamerasList = await Html5Qrcode.getCameras();
+            if (availableCamerasList && availableCamerasList.length > 1) {
+                if (btnSwitchCamera) btnSwitchCamera.style.display = 'flex';
+            }
+        } catch (e) {
+            availableCamerasList = [];
+        }
+
+        let cameraConfig = { facingMode: 'environment' };
+        if (preferredCameraId) {
+            cameraConfig = preferredCameraId;
+            activeCameraId = preferredCameraId;
+        } else if (availableCamerasList.length > 0) {
+            const rearCam = availableCamerasList.find(c => 
+                c.label && (c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear') || c.label.toLowerCase().includes('belakang') || c.label.toLowerCase().includes('environment'))
+            );
+            if (rearCam) {
+                activeCameraId = rearCam.id;
+                cameraConfig = rearCam.id;
+            } else {
+                activeCameraId = availableCamerasList[0].id;
+                cameraConfig = availableCamerasList[0].id;
+            }
+        }
+
+        const scanConfig = {
+            fps: 20,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const width = Math.min(Math.floor(viewfinderWidth * 0.86), 360);
+                const height = Math.min(Math.floor(viewfinderHeight * 0.65), 240);
+                return { width, height };
+            },
+            aspectRatio: 1.0
+        };
+
+        await html5QrScannerInstance.start(
+            cameraConfig,
+            scanConfig,
+            onCameraScanSuccess,
+            (errorMessage) => {
+                // Ignore continuous frame-by-frame miss
+            }
+        );
+
+        cameraScannerActive = true;
+        if (cameraLoadingIndicator) cameraLoadingIndicator.style.display = 'none';
+
+        try {
+            const capabilities = html5QrScannerInstance.getRunningTrackCameraCapabilities();
+            if (capabilities && typeof capabilities.torchFeature === 'function' && capabilities.torchFeature().isSupported()) {
+                if (btnToggleTorch) btnToggleTorch.style.display = 'flex';
+            }
+        } catch (e) {}
+    }
+
+    function onCameraScanSuccess(decodedText, decodedResult) {
+        if (!decodedText) return;
+        const code = decodedText.trim();
+        if (!code) return;
+
+        playBarcodeBeep();
+        if (navigator.vibrate) {
+            try { navigator.vibrate(120); } catch (e) {}
+        }
+
+        window.closeCameraScanner();
+
+        if (typeof cameraScanSuccessHandler === 'function') {
+            cameraScanSuccessHandler(code);
+            return;
+        }
+
+        if (cameraScanTargetInput === 'inputBinCode') {
+            if (inputBinCode) {
+                inputBinCode.value = code;
+            }
+            executeBinScan(code);
+            showToast(`Berhasil scan Bin: ${code}`, 'success');
+        } else {
+            const targetEl = document.getElementById(cameraScanTargetInput);
+            if (targetEl) {
+                targetEl.value = code;
+                targetEl.focus();
+                showToast(`Kode terscan: ${code}`, 'success');
+            }
+        }
+    }
+
+    window.closeCameraScanner = async function() {
+        if (html5QrScannerInstance) {
+            try {
+                if (html5QrScannerInstance.isScanning) {
+                    await html5QrScannerInstance.stop();
+                }
+                await html5QrScannerInstance.clear();
+            } catch (e) {
+                console.warn('Error stopping camera:', e);
+            }
+            html5QrScannerInstance = null;
+        }
+
+        cameraScannerActive = false;
+        isTorchEnabled = false;
+        if (btnToggleTorch) {
+            btnToggleTorch.classList.remove('active');
+            btnToggleTorch.style.display = 'none';
+        }
+        if (modalCameraScanner) {
+            modalCameraScanner.classList.remove('active');
+        }
+        if (cameraLoadingIndicator) {
+            cameraLoadingIndicator.style.display = 'none';
+        }
+    };
+
+    window.toggleScannerTorch = async function() {
+        if (!html5QrScannerInstance || !html5QrScannerInstance.isScanning) return;
+        try {
+            const capabilities = html5QrScannerInstance.getRunningTrackCameraCapabilities();
+            if (capabilities && typeof capabilities.torchFeature === 'function' && capabilities.torchFeature().isSupported()) {
+                isTorchEnabled = !isTorchEnabled;
+                await capabilities.torchFeature().apply(isTorchEnabled);
+                if (btnToggleTorch) {
+                    if (isTorchEnabled) {
+                        btnToggleTorch.classList.add('active');
+                    } else {
+                        btnToggleTorch.classList.remove('active');
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Torch toggle error:', e);
+        }
+    };
+
+    window.switchScannerCamera = async function() {
+        if (!availableCamerasList || availableCamerasList.length < 2) return;
+        const currentIndex = availableCamerasList.findIndex(c => c.id === activeCameraId);
+        const nextIndex = (currentIndex + 1) % availableCamerasList.length;
+        const nextCamera = availableCamerasList[nextIndex];
+        if (nextCamera) {
+            try {
+                await startCameraLiveFeed(nextCamera.id);
+            } catch (err) {
+                console.error('Failed to switch camera:', err);
+                showCameraError('Gagal berganti kamera: ' + (err.message || err));
+            }
+        }
+    };
+
+    window.submitManualCameraScan = function(event) {
+        if (event) event.preventDefault();
+        const code = (inputManualScanCode ? inputManualScanCode.value.trim() : '');
+        if (!code) {
+            showToast('Ketik Bin Code terlebih dahulu.', 'warning');
+            return;
+        }
+        onCameraScanSuccess(code);
+    };
+
+    if (modalCameraScanner) {
+        modalCameraScanner.addEventListener('click', (e) => {
+            if (e.target === modalCameraScanner) {
+                window.closeCameraScanner();
+            }
+        });
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalCameraScanner && modalCameraScanner.classList.contains('active')) {
+            window.closeCameraScanner();
+        }
+    });
 
     // Stepper Input Event Listener to enforce max limit live
     if (inputQtyRequest) {
