@@ -152,6 +152,29 @@ document.addEventListener('DOMContentLoaded', () => {
         setInterval(update, 10000);
     }
 
+    /**
+     * Checks if a bin_code is a synthetic fallback created when OCS has no physical rack for the SKU.
+     */
+    function isSyntheticBin(binCode, sku) {
+        if (!binCode) return true;
+        const b = String(binCode).trim().toUpperCase();
+        if (!sku) {
+            return b.startsWith('BIN-') && b.length > 8;
+        }
+        const s = String(sku).trim().toUpperCase();
+        return b === ('BIN-' + s) || b === ('LOKASI BIN-' + s) || b.startsWith('BIN-' + s);
+    }
+
+    /**
+     * Renders clean badge for a rack location, gracefully handling unmapped/synthetic bins.
+     */
+    function formatBinBadge(binCode, sku, defaultText = 'Belum ada rak') {
+        if (isSyntheticBin(binCode, sku)) {
+            return `<span class="bin-unmapped-tag" style="color: #94a3b8; font-size: 0.76rem;"><i class="fa-regular fa-circle-question"></i> ${defaultText}</span>`;
+        }
+        return `<span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${binCode}</span>`;
+    }
+
     // State for Login Warehouse Choice (Default: gudang_kecil)
     let selectedLoginWarehouse = 'gudang_kecil';
 
@@ -1739,12 +1762,16 @@ document.addEventListener('DOMContentLoaded', () => {
             opStockResultsList.innerHTML = `<div class="empty-feed">Tidak ada stok yang cocok.</div>`;
             return;
         }
-        opStockResultsList.innerHTML = items.slice(0, 30).map(s => `
+        opStockResultsList.innerHTML = items.slice(0, 30).map(s => {
+            const isUnmapped = isSyntheticBin(s.bin_code, s.sku);
+            const rackLabel = isUnmapped ? 'Belum ada Rak' : `Rak: ${s.bin_code}`;
+            const rackColor = isUnmapped ? '#94a3b8' : 'var(--primary)';
+            return `
             <div class="stock-feed-row" onclick="selectStockToScan('${s.bin_code || s.sku}')">
                 <div>
                     <strong>${s.sku}</strong>
                     <small style="display: block; color: var(--text-muted);">${s.product_name}</small>
-                    <small style="color: var(--primary); font-weight: 700;">Rak: ${s.bin_code || 'Belum ada Rak'}</small>
+                    <small style="color: ${rackColor}; font-weight: 700;">${rackLabel}</small>
                     ${s.barcode && s.barcode !== '-' ? `<small style="display: block; color: #64748b; font-family: var(--font-mono); font-size: 0.75rem; margin-top: 2px;"><i class="fa-solid fa-barcode"></i> ${s.barcode}</small>` : ''}
                 </div>
                 <div style="text-align: right;">
@@ -1752,7 +1779,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <small style="display: block; color: var(--text-muted);">Kecil</small>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     window.selectStockToScan = function(binOrSku) {
@@ -1973,7 +2001,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <tr>
                     <td><strong>${r.request_no}</strong></td>
-                    <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
+                    <td>${formatBinBadge(r.bin_code, r.sku)}</td>
                     <td class="col-sku-combined">
                         <span class="sku-code-text">${r.sku}</span>
                         <span class="sku-product-name">${r.product_name || '-'}</span>
@@ -1999,18 +2027,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        dashLowStockList.innerHTML = lowItems.map(s => `
+        dashLowStockList.innerHTML = lowItems.map(s => {
+            const rackLabel = isSyntheticBin(s.bin_code, s.sku) ? 'Belum ada rak' : s.bin_code;
+            return `
             <div class="low-stock-row">
                 <div>
                     <strong>${s.sku}</strong>
-                    <span>${s.product_name} • Rak: <strong style="color: var(--text-dark);">${s.bin_code || '-'}</strong></span>
+                    <span>${s.product_name} • Rak: <strong style="color: var(--text-dark);">${rackLabel || '-'}</strong></span>
                 </div>
                 <div style="text-align: right;">
                     <span class="qty-warn">${s.qty_gudang_kecil} Pcs</span>
                     <small style="display: block; color: var(--text-muted); font-size: 0.7rem;">Gudang Kecil</small>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     // =========================================================================
@@ -2044,12 +2075,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         skuRacksTableBody.innerHTML = items.map(r => {
-            // OCS returns some SKUs with no physical bin yet; the sync stores a
-            // synthetic "BIN-<sku>" key for those. Show them as unmapped instead
-            // of echoing the SKU back in both location columns.
             const sku = r.sku || '';
             const binCode = r.bin_code || '';
-            const isUnmapped = binCode.toUpperCase() === ('BIN-' + sku).toUpperCase();
+            const isUnmapped = isSyntheticBin(binCode, sku);
             const area = (r.notes || '').replace(/^Area:\s*/i, '').trim();
 
             const binCell = isUnmapped
@@ -2057,7 +2085,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 : `<strong class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${binCode}</strong>`;
 
             let rackLabel = r.rack_name || '';
-            if (isUnmapped || !rackLabel || rackLabel.toUpperCase() === binCode.toUpperCase()) {
+            if (isUnmapped || !rackLabel || rackLabel.toUpperCase() === binCode.toUpperCase() || rackLabel.startsWith('Lokasi BIN-')) {
                 rackLabel = isUnmapped ? (area ? `Area ${area}` : 'Belum ada lokasi rak') : `Rak ${binCode}`;
             }
 
@@ -2283,7 +2311,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                     <td><strong style="font-family: var(--font-mono); font-size: 0.76rem; color: #0f172a;">${r.request_no}</strong></td>
                     <td><small style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.68rem;">${(r.created_at || '').substring(0, 16)}</small></td>
-                    <td><span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${r.bin_code}</span></td>
+                    <td>${formatBinBadge(r.bin_code, r.sku)}</td>
                     <td class="col-sku-combined">
                         <span class="sku-code-text">${r.sku}</span>
                         <span class="sku-product-name">${r.product_name || '-'}</span>
@@ -2634,7 +2662,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="sku-product-name">${s.product_name || '-'}</span>
                 </td>
                 <td><span style="font-family: var(--font-mono); font-size: 0.8rem; color: #475569;">${s.barcode || '-'}</span></td>
-                <td>${s.bin_code ? `<span class="loc-bin-tag"><i class="fa-solid fa-tag"></i> ${s.bin_code}</span>` : '<span style="color: var(--text-muted);">-</span>'}</td>
+                <td>${formatBinBadge(s.bin_code, s.sku)}</td>
                 <td><span style="background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600;">${s.area_id || 'Pusat'}</span></td>
                 <td class="td-right"><strong style="font-family: var(--font-mono); font-size: 0.95rem;">${Number(s.qty_gudang_kecil || 0).toLocaleString('id-ID')}</strong></td>
                 <td class="td-right" style="color: var(--success); font-weight: 700; font-family: var(--font-mono); font-size: 0.95rem;">${Number(s.qty_gudang_besar || 0).toLocaleString('id-ID')}</td>
