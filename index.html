@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=5.3.7">
+  <link rel="stylesheet" href="style.css?v=5.4.0">
 
   <!-- Instant session restore to eliminate refresh flicker -->
   <script>
@@ -322,34 +322,6 @@
               </div>
             </div>
 
-            <!-- Pilihan Lokasi Kerja Gudang Saat Login -->
-            <div class="warehouse-select-section">
-              <label class="warehouse-select-label">
-                <i class="fa-solid fa-map-location-dot"></i> Lokasi Tugas / Gudang Saat Ini:
-              </label>
-              <div class="warehouse-options-grid">
-                <label class="warehouse-option-card active" id="optCardKecil" onclick="selectLoginWarehouse('gudang_kecil')">
-                  <input type="radio" name="loginWarehouse" id="radioWhKecil" value="gudang_kecil" checked>
-                  <div class="card-radio-indicator"><i class="fa-solid fa-circle-dot"></i></div>
-                  <div class="card-icon kecil"><i class="fa-solid fa-box-open"></i></div>
-                  <div class="card-text">
-                    <strong>Gudang Kecil</strong>
-                    <span>Request Replenish / Picking</span>
-                  </div>
-                </label>
-
-                <label class="warehouse-option-card" id="optCardBesar" onclick="selectLoginWarehouse('gudang_besar')">
-                  <input type="radio" name="loginWarehouse" id="radioWhBesar" value="gudang_besar">
-                  <div class="card-radio-indicator"><i class="fa-regular fa-circle"></i></div>
-                  <div class="card-icon besar"><i class="fa-solid fa-warehouse"></i></div>
-                  <div class="card-text">
-                    <strong>Gudang Besar</strong>
-                    <span>Replenish / Main Storage</span>
-                  </div>
-                </label>
-              </div>
-            </div>
-
             <!-- Submit Button -->
             <button type="submit" id="btnLoginSubmit" class="btn-ieg-primary">
               <span>Masuk Sekarang</span>
@@ -398,8 +370,137 @@
       <!-- Scrollable Mobile Body -->
       <main class="mobile-main-body">
 
-        <!-- TAB 1: SCANNER & REPLENISH (HOME) -->
-        <section id="opTabScan" class="mobile-tab-view active">
+        <!-- TAB 0: HOME / MENU UTAMA (ANDROID STYLE) -->
+        <section id="opTabHome" class="mobile-tab-view active">
+
+          <!-- Android Style Welcome / User Header Card -->
+          <div class="android-hero-card">
+            <div class="android-hero-user-row">
+              <div class="android-avatar-circle">
+                <i class="fa-solid fa-user-shield"></i>
+              </div>
+              <div class="android-user-details">
+                <span class="android-greeting-tag">Selamat Bekerja</span>
+                <h3 class="android-user-name" id="homeOperatorName">Operator Gudang</h3>
+                <span class="android-badge-status"><span class="status-dot"></span> Online • OCS WMS Mobile</span>
+              </div>
+            </div>
+
+            <!-- Quick operational metrics bar -->
+            <div class="android-quick-stats-row">
+              <div class="android-stat-item" onclick="switchMobileTab('opTabPickTask')">
+                <strong id="homeStatPending" class="text-orange">0</strong>
+                <span>Tugas Replenish</span>
+              </div>
+              <div class="android-stat-divider"></div>
+              <div class="android-stat-item" onclick="switchMobileTab('opTabScan')">
+                <strong id="homeStatToday" class="text-primary">0</strong>
+                <span>Req Selesai Hari Ini</span>
+              </div>
+              <div class="android-stat-divider"></div>
+              <div class="android-stat-item" onclick="switchMobileTab('opTabStockSearch')">
+                <strong id="homeStatTotalSku" class="text-green">Live</strong>
+                <span>Monitoring Stok</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Label -->
+          <div class="android-menu-section-header">
+            <h4><i class="fa-solid fa-shapes"></i> Menu Utama Aplikasi</h4>
+            <span class="android-section-sub">Pilih modul tugas operasional</span>
+          </div>
+
+          <!-- Android Application Menu Grid (Big Touch-Friendly Modern App Cards) -->
+          <div class="android-app-menu-grid">
+
+            <!-- Card 1: Request Replenish -->
+            <div class="android-menu-card card-req-replenish" onclick="switchMobileTab('opTabScan')">
+              <div class="menu-card-top">
+                <div class="menu-card-icon">
+                  <i class="fa-solid fa-box-open"></i>
+                </div>
+                <span class="menu-card-badge-tag">Gudang Kecil</span>
+              </div>
+              <div class="menu-card-body">
+                <h3 class="menu-card-title">Request Replenish</h3>
+                <p class="menu-card-desc">Scan Bin rak & ajukan barang dari Gudang Besar ke Gudang Kecil</p>
+              </div>
+              <div class="menu-card-footer">
+                <span class="menu-footer-link">Buka Scanner <i class="fa-solid fa-arrow-right"></i></span>
+              </div>
+            </div>
+
+            <!-- Card 2: Replenish (Pick Task) -->
+            <div class="android-menu-card card-replenish-task" onclick="switchMobileTab('opTabPickTask')">
+              <div class="menu-card-top">
+                <div class="menu-card-icon">
+                  <i class="fa-solid fa-cart-flatbed"></i>
+                </div>
+                <span class="menu-badge-alert" id="homeBadgePending" style="display: none;">0 Tugas</span>
+              </div>
+              <div class="menu-card-body">
+                <h3 class="menu-card-title">Replenish</h3>
+                <p class="menu-card-desc">Kerjakan antrean pick & mutasi barang dari Gudang Besar</p>
+              </div>
+              <div class="menu-card-footer">
+                <span class="menu-footer-link">Daftar Antrean <i class="fa-solid fa-arrow-right"></i></span>
+              </div>
+            </div>
+
+            <!-- Card 3: Check Stock (Cek Stok) -->
+            <div class="android-menu-card card-check-stock" onclick="switchMobileTab('opTabStockSearch')">
+              <div class="menu-card-top">
+                <div class="menu-card-icon">
+                  <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <span class="menu-badge-camera"><i class="fa-solid fa-camera"></i> Kamera Scan</span>
+              </div>
+              <div class="menu-card-body">
+                <h3 class="menu-card-title">Check Stock</h3>
+                <p class="menu-card-desc">Cek saldo stok produk & scan barcode kamera PDA/HP</p>
+              </div>
+              <div class="menu-card-footer">
+                <span class="menu-footer-link">Cek & Scan Stok <i class="fa-solid fa-arrow-right"></i></span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Riwayat Selesai Direplenish Hari Ini -->
+          <div class="recent-requests-card" style="margin-top: 0.35rem;">
+            <div class="card-header-flex">
+              <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <div style="width: 34px; height: 34px; border-radius: 10px; background: #e0e7ff; color: #4338ca; display: grid; place-items: center; font-size: 0.95rem;">
+                  <i class="fa-solid fa-clock-rotate-left"></i>
+                </div>
+                <div>
+                  <h4 style="margin: 0; font-size: 0.92rem; font-weight: 800; color: #1e293b;">Riwayat Permintaan Selesai</h4>
+                  <p style="margin: 0; font-size: 0.72rem; color: #64748b;">Request yang telah selesai diproses hari ini</p>
+                </div>
+              </div>
+              <button type="button" class="btn-refresh-task" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;" onclick="loadOperatorHistory()" title="Perbarui Riwayat">
+                <i class="fa-solid fa-rotate"></i> <span>Refresh</span>
+              </button>
+            </div>
+            
+            <div class="requests-feed-list" id="homeOperatorHistoryList">
+              <div class="empty-feed"><i class="fa-solid fa-spinner fa-spin"></i> Memuat riwayat...</div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- TAB 1: SCANNER & REPLENISH -->
+        <section id="opTabScan" class="mobile-tab-view">
+
+          <!-- Subpage Header with Back to Menu -->
+          <div class="mobile-subpage-header">
+            <button type="button" class="btn-subpage-back" onclick="switchMobileTab('opTabHome')">
+              <i class="fa-solid fa-arrow-left"></i> <span>Menu Utama</span>
+            </button>
+            <span class="subpage-title">Request Replenish</span>
+          </div>
 
           <!-- Scanner Hero Card -->
           <div class="scan-hero-card">
@@ -565,6 +666,15 @@
 
         <!-- TAB 2: TASK PICK GUDANG BESAR (OPERATOR GUDANG BESAR) -->
         <section id="opTabPickTask" class="mobile-tab-view">
+
+          <!-- Subpage Header with Back to Menu -->
+          <div class="mobile-subpage-header">
+            <button type="button" class="btn-subpage-back" onclick="switchMobileTab('opTabHome')">
+              <i class="fa-solid fa-arrow-left"></i> <span>Menu Utama</span>
+            </button>
+            <span class="subpage-title">Replenish / Pick Task</span>
+          </div>
+
           <div class="pick-tasks-card">
 
             <!-- Card Header: Title, Subtitle, and Refresh -->
@@ -640,11 +750,28 @@
 
         <!-- TAB 3: STOCK SEARCH (MOBILE) -->
         <section id="opTabStockSearch" class="mobile-tab-view">
+
+          <!-- Subpage Header with Back to Menu -->
+          <div class="mobile-subpage-header">
+            <button type="button" class="btn-subpage-back" onclick="switchMobileTab('opTabHome')">
+              <i class="fa-solid fa-arrow-left"></i> <span>Menu Utama</span>
+            </button>
+            <span class="subpage-title">Check Stock</span>
+          </div>
+
           <div class="stock-search-card">
             <div class="search-field-pill">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="opStockSearchInput" placeholder="Cari SKU, Nama Produk, atau Bin..."
-                oninput="filterOpStockList()">
+              <i class="fa-solid fa-magnifying-glass search-pill-icon"></i>
+              <input type="text" id="opStockSearchInput" placeholder="Cari SKU, Nama Produk, Barcode, atau Bin..."
+                oninput="filterOpStockList()" autocomplete="off">
+              <button type="button" id="btnClearOpStockSearch" class="btn-clear-scan" title="Hapus Pencarian"
+                onclick="clearOpStockSearch()" style="display: none;">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+              <button type="button" id="btnOpenOpStockCamera" class="btn-scan-camera" title="Buka Kamera Scan Barcode"
+                onclick="openOpStockCameraScanner()">
+                <i class="fa-solid fa-camera"></i>
+              </button>
             </div>
             <div class="stock-feed-list" id="opStockResultsList">
               <div class="empty-feed">Memuat data stok...</div>
@@ -696,9 +823,13 @@
 
       </main>
 
-      <!-- Native Mobile Bottom Tab Bar (Adaptive for Gudang Kecil / Gudang Besar) -->
+      <!-- Native Mobile Bottom Tab Bar -->
       <nav class="mobile-bottom-navbar">
-        <button class="bottom-tab-item active" id="btnNavScan" onclick="switchMobileTab('opTabScan', this)">
+        <button class="bottom-tab-item active" id="btnNavHome" onclick="switchMobileTab('opTabHome', this)">
+          <i class="fa-solid fa-house"></i>
+          <span>Menu</span>
+        </button>
+        <button class="bottom-tab-item" id="btnNavScan" onclick="switchMobileTab('opTabScan', this)">
           <i class="fa-solid fa-box-open"></i>
           <span>Req Replenish</span>
         </button>
@@ -743,33 +874,33 @@
         </div>
 
         <nav class="portal-nav ieg-nav">
-          <button class="portal-nav-btn active" data-tab="tabDashboard">
+          <button class="portal-nav-btn active" data-tab="tabDashboard" title="Home (Dashboard)">
             <span class="nav-icon"><i class="fa-solid fa-house"></i></span>
             <span class="nav-text">Home</span>
           </button>
 
-          <button class="portal-nav-btn" data-tab="tabReplenish">
+          <button class="portal-nav-btn" data-tab="tabReplenish" title="Permintaan Replenish">
             <span class="nav-icon"><i class="fa-solid fa-truck-ramp-box"></i></span>
             <span class="nav-text">Permintaan Replenish</span>
             <span class="portal-badge" id="badgePendingCount">0</span>
           </button>
 
-          <button class="portal-nav-btn" data-tab="tabSkuRacks">
+          <button class="portal-nav-btn" data-tab="tabSkuRacks" title="Master SKU-Rack">
             <span class="nav-icon"><i class="fa-solid fa-table-cells"></i></span>
             <span class="nav-text">Master SKU-Rack</span>
           </button>
 
-          <button class="portal-nav-btn" data-tab="tabStocks">
+          <button class="portal-nav-btn" data-tab="tabStocks" title="Data Stok OCS">
             <span class="nav-icon"><i class="fa-solid fa-warehouse"></i></span>
             <span class="nav-text">Data Stok OCS</span>
           </button>
 
-          <button class="portal-nav-btn" data-tab="tabMinusStock">
+          <button class="portal-nav-btn" data-tab="tabMinusStock" title="Stok Minus Gudang Kecil">
             <span class="nav-icon"><i class="fa-solid fa-arrow-trend-down"></i></span>
             <span class="nav-text">Stok Minus Gudang Kecil</span>
           </button>
 
-          <button class="portal-nav-btn" data-tab="tabUsers">
+          <button class="portal-nav-btn" data-tab="tabUsers" title="Manajemen User">
             <span class="nav-icon"><i class="fa-solid fa-users-gear"></i></span>
             <span class="nav-text">Manajemen User</span>
           </button>
@@ -792,6 +923,9 @@
         </div>
       </aside>
 
+      <!-- Mobile Backdrop Overlay -->
+      <div id="adminSidebarBackdrop" class="admin-sidebar-backdrop" onclick="toggleAdminSidebar(false)"></div>
+
       <!-- Admin Main Area -->
       <main class="admin-portal-main ieg-main">
 
@@ -799,7 +933,9 @@
         <header class="portal-topbar ieg-topbar">
           <div class="topbar-left">
             <div class="ieg-topbar-breadcrumb">
-              <button class="btn-toggle-sidebar" title="Toggle Sidebar"><i class="fa-solid fa-bars"></i></button>
+              <button class="btn-toggle-sidebar" id="btnToggleAdminSidebar" onclick="toggleAdminSidebar()" title="Minimize / Maximize Sidebar">
+                <i class="fa-solid fa-bars" id="iconToggleAdminSidebar"></i>
+              </button>
               <span class="pink-divider">|</span>
               <h1 id="adminPageTitle">Home</h1>
             </div>
@@ -1910,7 +2046,7 @@
   <script src="html5-qrcode.min.js"></script>
 
   <!-- App Logic -->
-  <script src="app.js?v=5.3.7"></script>
+  <script src="app.js?v=5.4.0"></script>
 </body>
 
 </html>

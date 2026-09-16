@@ -964,17 +964,38 @@ body {
   display: flex;
   align-items: center;
   background: #f1f5f9;
-  border-radius: 10px;
-  padding: 0.75rem 0.85rem;
+  border-radius: 14px;
+  padding: 0.35rem 0.45rem 0.35rem 0.85rem;
   gap: 0.5rem;
   margin-bottom: 0.85rem;
+  border: 1.5px solid #e2e8f0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.search-field-pill:focus-within {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+.search-field-pill .search-pill-icon {
+  color: #64748b;
+  font-size: 0.95rem;
+  flex-shrink: 0;
 }
 .search-field-pill input {
   flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
   background: transparent;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  color: #0f172a;
+  padding: 0.45rem 0;
+}
+.search-field-pill .btn-clear-scan {
+  flex-shrink: 0;
+}
+.search-field-pill .btn-scan-camera {
+  flex-shrink: 0;
 }
 .stock-feed-list {
   display: flex;
@@ -1148,6 +1169,7 @@ body {
   z-index: 50;
   user-select: none;
   overflow: hidden;
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .portal-brand {
@@ -2801,11 +2823,135 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .btn-toggle-sidebar:hover {
   background: var(--primary);
   color: #ffffff;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  transform: translateY(-1px);
+}
+.btn-toggle-sidebar:active {
+  transform: scale(0.95);
+}
+.btn-toggle-sidebar.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+/* ==========================================================================
+   ADMIN SIDEBAR MINIMIZE / MAXIMIZE (COLLAPSED) STYLING
+   ========================================================================== */
+.admin-portal-layout.sidebar-collapsed .admin-portal-sidebar {
+  width: 76px !important;
+  min-width: 76px !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-brand {
+  padding: 1.1rem 0.5rem 0.9rem !important;
+  justify-content: center !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-titles,
+.admin-portal-layout.sidebar-collapsed .brand-subtitle,
+.admin-portal-layout.sidebar-collapsed .nav-text,
+.admin-portal-layout.sidebar-collapsed .nav-group-title,
+.admin-portal-layout.sidebar-collapsed .ieg-user-text,
+.admin-portal-layout.sidebar-collapsed .status-info-text {
+  display: none !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-nav {
+  padding: 0.6rem 0.4rem !important;
+  align-items: center !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-nav-btn {
+  width: 48px !important;
+  height: 48px !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  border-radius: 12px !important;
+  margin: 0.18rem auto !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-nav-btn .nav-icon {
+  margin: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  font-size: 1.15rem !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-nav-btn .portal-badge,
+.admin-portal-layout.sidebar-collapsed .portal-nav-btn .portal-badge-sm {
+  position: absolute !important;
+  top: 4px !important;
+  right: 4px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 4px !important;
+  font-size: 0.6rem !important;
+  line-height: 18px !important;
+  border-radius: 9px !important;
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border: 2px solid #1e1b4b !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-system-status {
+  margin: 0.5rem auto !important;
+  padding: 0.5rem !important;
+  width: 44px !important;
+  justify-content: center !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-user-footer {
+  padding: 0.75rem 0.4rem !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-user-footer .user-block {
+  justify-content: center !important;
+  margin: 0 !important;
+}
+.admin-portal-layout.sidebar-collapsed .portal-user-footer .btn-portal-logout {
+  margin: 0 !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Mobile Responsive Drawer Overlay for Sidebar */
+.admin-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 998;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+@media (max-width: 768px) {
+  .admin-portal-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    height: 100vh !important;
+    z-index: 999 !important;
+    transform: translateX(-100%) !important;
+    width: 280px !important;
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.35) !important;
+  }
+  .admin-portal-layout.mobile-sidebar-open .admin-portal-sidebar {
+    transform: translateX(0) !important;
+  }
+  .admin-portal-layout.mobile-sidebar-open .admin-sidebar-backdrop {
+    display: block !important;
+    opacity: 1 !important;
+  }
 }
 .pink-divider {
   color: #7c3aed;
@@ -5155,4 +5301,322 @@ tr.row-selected {
 .btn-manual-apply:hover {
   background: #4338ca;
 }
+
+/* ==========================================================================
+   ANDROID-STYLE OPERATOR APP HOME & MENU CARDS
+   ========================================================================== */
+.android-hero-card {
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #4338ca 100%);
+  border-radius: 20px;
+  padding: 1.2rem;
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(49, 46, 129, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  position: relative;
+  overflow: hidden;
+}
+.android-hero-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.3) 0%, rgba(129, 140, 248, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.android-hero-user-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.android-avatar-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  flex-shrink: 0;
+}
+.android-user-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.android-greeting-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #a5b4fc;
+}
+.android-user-name {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0;
+  line-height: 1.2;
+  color: #ffffff;
+}
+.android-badge-status {
+  font-size: 0.68rem;
+  color: #c7d2fe;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.android-badge-status .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+/* Quick Stats Row inside Hero */
+.android-quick-stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.6rem 0.85rem;
+}
+.android-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  flex: 1;
+  transition: transform 0.15s;
+}
+.android-stat-item:hover {
+  transform: translateY(-1px);
+}
+.android-stat-item strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  line-height: 1.15;
+}
+.android-stat-item span {
+  font-size: 0.62rem;
+  color: #cbd5e1;
+  margin-top: 0.15rem;
+  text-align: center;
+}
+.android-stat-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Menu Section Header */
+.android-menu-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0.4rem 0.2rem 0;
+}
+.android-menu-section-header h4 {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.android-menu-section-header h4 i {
+  color: #4f46e5;
+}
+.android-section-sub {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* Android Menu Grid */
+.android-app-menu-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.android-menu-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 1.15rem;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+  overflow: hidden;
+}
+.android-menu-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.09);
+  border-color: #cbd5e1;
+}
+.android-menu-card:active {
+  transform: scale(0.98);
+}
+.android-menu-card .menu-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.android-menu-card .menu-card-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+  flex-shrink: 0;
+}
+
+/* Specific Card Variants */
+.android-menu-card.card-req-replenish {
+  border-left: 5px solid #4f46e5;
+}
+.android-menu-card.card-req-replenish .menu-card-icon {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+}
+.android-menu-card.card-req-replenish:hover {
+  border-color: #6366f1;
+}
+
+.android-menu-card.card-replenish-task {
+  border-left: 5px solid #f97316;
+}
+.android-menu-card.card-replenish-task .menu-card-icon {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.35);
+}
+.android-menu-card.card-replenish-task:hover {
+  border-color: #f97316;
+}
+
+.android-menu-card.card-check-stock {
+  border-left: 5px solid #10b981;
+}
+.android-menu-card.card-check-stock .menu-card-icon {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+.android-menu-card.card-check-stock:hover {
+  border-color: #10b981;
+}
+
+.android-menu-card .menu-card-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 0.25rem;
+}
+.android-menu-card .menu-card-desc {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+.android-menu-card .menu-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 0.45rem;
+  border-top: 1px solid #f1f5f9;
+}
+.android-menu-card .menu-footer-link {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #4f46e5;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.android-menu-card.card-replenish-task .menu-footer-link {
+  color: #ea580c;
+}
+.android-menu-card.card-check-stock .menu-footer-link {
+  color: #059669;
+}
+
+.menu-card-badge-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #4f46e5;
+  background: #eef2ff;
+  border-radius: 8px;
+  padding: 0.25rem 0.6rem;
+}
+.menu-badge-alert {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #ffffff;
+  background: #ea580c;
+  border-radius: 8px;
+  padding: 0.25rem 0.6rem;
+  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.35);
+}
+.menu-badge-camera {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #059669;
+  background: #ecfdf5;
+  border-radius: 8px;
+  padding: 0.25rem 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Mobile Subpage Header (with back to menu button) */
+.mobile-subpage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 0.65rem 0.95rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  margin-bottom: 0.25rem;
+}
+.btn-subpage-back {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.4rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-subpage-back:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.subpage-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
 

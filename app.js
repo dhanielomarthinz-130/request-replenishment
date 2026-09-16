@@ -236,7 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const profWhIcon = document.getElementById('profileWhIcon');
                 if (profWhName) profWhName.textContent = effectiveWh === 'gudang_besar' ? 'Gudang Besar' : 'Gudang Kecil';
                 if (profWhDesc) profWhDesc.textContent = effectiveWh === 'gudang_besar' ? 'Area Main Storage • Mengerjakan Replenish' : 'Area Picking Rack • Req Replenish';
-                if (profWhIcon) profWhIcon.innerHTML = `<i class="fa-solid fa-${effectiveWh === 'gudang_besar' ? 'warehouse' : 'box-open'}"></i>`;
+                const homeOpName = document.getElementById('homeOperatorName');
+                if (homeOpName) homeOpName.textContent = AppState.user.full_name || AppState.user.username || 'Operator Gudang';
 
                 applyWarehouseModeUI(effectiveWh);
             }
@@ -260,20 +261,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function applyWarehouseModeUI(effectiveWh) {
-        const isGB = effectiveWh === 'gudang_besar';
+        // All tabs (Home, Req Replenish, Replenish, Cek Stok, Akun) are always available in the Android menu
         const btnNavScan = document.getElementById('btnNavScan');
-        const tabScan = document.getElementById('opTabScan');
-        const btnNavPick = document.getElementById('btnNavPickTask');
-
         if (btnNavScan) {
-            btnNavScan.style.display = isGB ? 'none' : 'flex';
-        }
-
-        // When switching to Gudang Besar mode, request page is not displayed: redirect to Replenish task tab
-        if (isGB) {
-            if (tabScan && tabScan.classList.contains('active')) {
-                switchMobileTab('opTabPickTask', btnNavPick);
-            }
+            btnNavScan.style.display = 'flex';
         }
     }
 
@@ -284,30 +275,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function routeForUser(user, preferredTab) {
         AppState.user = user;
         const isAdminRole = user.role === 'admin' || user.role === 'superadmin';
-        const effectiveWh = (user.work_location || user.role) === 'gudang_besar' ? 'gudang_besar' : (isAdminRole ? 'admin' : 'gudang_kecil');
 
         if (isAdminRole) {
             stopPickTaskAutoPolling();
             switchView('admin');
             const tab = preferredTab || AppState.activeAdminTab || 'tabDashboard';
             if (document.getElementById(tab)) switchAdminTab(tab);
-        } else if (effectiveWh === 'gudang_besar') {
-            switchView('operator');
-            applyWarehouseModeUI('gudang_besar');
-            startPickTaskAutoPolling();
-            const btnPick = document.getElementById('btnNavPickTask');
-            const targetTab = (preferredTab && preferredTab !== 'opTabScan' && document.getElementById(preferredTab))
-                ? preferredTab
-                : 'opTabPickTask';
-            switchMobileTab(targetTab, btnPick);
         } else {
-            // Role gudang_kecil
+            // Operator Role: Direct access to Android-style home menu or specified tab
             switchView('operator');
-            applyWarehouseModeUI('gudang_kecil');
-            stopPickTaskAutoPolling();
-            const btnScan = document.getElementById('btnNavScan');
-            const targetTab = (preferredTab && document.getElementById(preferredTab)) ? preferredTab : 'opTabScan';
-            switchMobileTab(targetTab, btnScan);
+            startPickTaskAutoPolling();
+            const targetTab = (preferredTab && document.getElementById(preferredTab)) ? preferredTab : 'opTabHome';
+            switchMobileTab(targetTab);
         }
     }
 
@@ -373,12 +352,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data.status === 'success') {
                 AppState.user = data.user;
-                const effectiveWh = (data.user.work_location || data.user.role) === 'gudang_besar' ? 'gudang_besar' : 'gudang_kecil';
-                const initialTab = data.user.role === 'admin' ? 'tabDashboard' : (effectiveWh === 'gudang_besar' ? 'opTabPickTask' : 'opTabScan');
+                const isAdmin = data.user.role === 'admin' || data.user.role === 'superadmin';
+                const initialTab = isAdmin ? 'tabDashboard' : 'opTabHome';
                 
                 writeCachedSession(data.user, initialTab, data.session_token);
-                showToast(`Login berhasil sebagai ${data.user.full_name} (${effectiveWh === 'gudang_besar' ? 'Gudang Besar' : 'Gudang Kecil'})`, 'success');
-                routeForUser(data.user);
+                showToast(`Login berhasil sebagai ${data.user.full_name || data.user.username}`, 'success');
+                routeForUser(data.user, initialTab);
             } else {
                 showToast(data.message || 'Username atau password salah.', 'error');
             }
@@ -457,11 +436,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.switchMobileTab = function(tabId, btn) {
         if (window.closeCameraScanner) window.closeCameraScanner();
-        const effectiveWh = AppState.user ? ((AppState.user.work_location || AppState.user.role) === 'gudang_besar' ? 'gudang_besar' : 'gudang_kecil') : 'gudang_kecil';
-        if (effectiveWh === 'gudang_besar' && tabId === 'opTabScan') {
-            tabId = 'opTabPickTask';
-            btn = document.getElementById('btnNavPickTask');
-        }
 
         document.querySelectorAll('.mobile-bottom-navbar .bottom-tab-item').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.mobile-main-body .mobile-tab-view').forEach(p => p.classList.remove('active'));
@@ -478,7 +452,11 @@ document.addEventListener('DOMContentLoaded', () => {
             writeCachedSession(AppState.user, tabId, localStorage.getItem('ocsSessionToken'));
         }
 
-        if (tabId === 'opTabScan') {
+        if (tabId === 'opTabHome') {
+            loadPickTasks();
+            loadOperatorHistory();
+            loadOpStockSearchList();
+        } else if (tabId === 'opTabScan') {
             setTimeout(() => inputBinCode && inputBinCode.focus(), 200);
             loadOperatorHistory();
         } else if (tabId === 'opTabPickTask') {
@@ -675,18 +653,31 @@ document.addEventListener('DOMContentLoaded', () => {
         cameraScanTargetInput = targetInputId || 'inputBinCode';
         cameraScanSuccessHandler = onSuccessCallback || null;
 
+        const cameraModalHeading = document.querySelector('.camera-modal-heading');
+
         if (cameraTargetHint) {
             if (cameraScanTargetInput === 'inputPickRackBesar') {
+                if (cameraModalHeading) cameraModalHeading.textContent = 'Scan Lokasi Rak Gudang Besar';
                 cameraTargetHint.textContent = 'Scan barcode / QR lokasi rak Gudang Besar';
             } else if (cameraScanTargetInput === 'inputPickBatchNumber') {
+                if (cameraModalHeading) cameraModalHeading.textContent = 'Scan Batch Number / Lot';
                 cameraTargetHint.textContent = 'Scan barcode batch number / lot produk';
+            } else if (cameraScanTargetInput === 'opStockSearchInput') {
+                if (cameraModalHeading) cameraModalHeading.textContent = 'Scan Barcode / QR Cek Stok';
+                cameraTargetHint.textContent = 'Arahkan kamera ke Barcode SKU, Produk, atau Bin Rak';
             } else {
+                if (cameraModalHeading) cameraModalHeading.textContent = 'Scan Barcode / QR Rak';
                 cameraTargetHint.textContent = 'Arahkan kamera ke Bin Code lokasi rak';
             }
         }
 
         if (inputManualScanCode) {
             inputManualScanCode.value = '';
+            if (cameraScanTargetInput === 'opStockSearchInput') {
+                inputManualScanCode.placeholder = 'Atau ketik SKU / Barcode / Bin...';
+            } else {
+                inputManualScanCode.placeholder = 'Atau ketik Bin Code (cth: PL-17-01-01)...';
+            }
         }
         if (cameraErrorAlert) {
             cameraErrorAlert.style.display = 'none';
@@ -863,6 +854,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             executeBinScan(code);
             showToast(`Berhasil scan Bin: ${code}`, 'success');
+        } else if (cameraScanTargetInput === 'opStockSearchInput') {
+            if (opStockSearchInput) {
+                opStockSearchInput.value = code;
+            }
+            const btnClear = document.getElementById('btnClearOpStockSearch');
+            if (btnClear) btnClear.style.display = 'flex';
+            filterOpStockList();
+            showToast(`Hasil scan stok: ${code}`, 'success');
         } else {
             const targetEl = document.getElementById(cameraScanTargetInput);
             if (targetEl) {
@@ -897,6 +896,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (cameraLoadingIndicator) {
             cameraLoadingIndicator.style.display = 'none';
+        }
+        const cameraModalHeading = document.querySelector('.camera-modal-heading');
+        if (cameraModalHeading) {
+            cameraModalHeading.textContent = 'Scan Barcode / QR Rak';
+        }
+        if (inputManualScanCode) {
+            inputManualScanCode.placeholder = 'Atau ketik Bin Code (cth: PL-17-01-01)...';
         }
     };
 
@@ -939,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event) event.preventDefault();
         const code = (inputManualScanCode ? inputManualScanCode.value.trim() : '');
         if (!code) {
-            showToast('Ketik Bin Code terlebih dahulu.', 'warning');
+            showToast('Ketik kode terlebih dahulu.', 'warning');
             return;
         }
         onCameraScanSuccess(code);
@@ -1145,17 +1151,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 }).join('');
 
-                historyContainer.innerHTML = historyHtml;
+                if (historyContainer) historyContainer.innerHTML = historyHtml;
+                const homeContainer = document.getElementById('homeOperatorHistoryList');
+                if (homeContainer) homeContainer.innerHTML = historyHtml;
+                const homeStatToday = document.getElementById('homeStatToday');
+                if (homeStatToday) homeStatToday.textContent = json.data.length;
             } else {
                 if (opStatsToday) opStatsToday.textContent = '0';
                 if (opStatsCompleted) opStatsCompleted.textContent = '0 Pcs';
-                historyContainer.innerHTML = `
+                const homeStatToday = document.getElementById('homeStatToday');
+                if (homeStatToday) homeStatToday.textContent = '0';
+                const emptyHtml = `
                     <div class="empty-feed" style="text-align: center; padding: 1.5rem 1rem; color: #94a3b8;">
                         <i class="fa-solid fa-clipboard-check" style="font-size: 1.8rem; color: #cbd5e1; display: block; margin-bottom: 0.5rem;"></i>
                         <strong style="color: #64748b; font-size: 0.85rem; display: block;">Belum ada request selesai direplenish hari ini</strong>
                         <span style="font-size: 0.75rem;">Request yang telah selesai direplenish oleh Gudang Besar akan langsung tampil di sini.</span>
                     </div>
                 `;
+                if (historyContainer) historyContainer.innerHTML = emptyHtml;
+                const homeContainer = document.getElementById('homeOperatorHistoryList');
+                if (homeContainer) homeContainer.innerHTML = emptyHtml;
             }
         } catch (err) {
             console.error('loadOperatorHistory error:', err);
@@ -1315,6 +1330,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 bubble.style.display = 'inline-flex';
             } else {
                 bubble.style.display = 'none';
+            }
+        }
+
+        const homeStatPending = document.getElementById('homeStatPending');
+        if (homeStatPending) homeStatPending.textContent = pendingCount;
+
+        const homeBadgePending = document.getElementById('homeBadgePending');
+        if (homeBadgePending) {
+            if (pendingCount > 0) {
+                homeBadgePending.textContent = `${pendingCount} Tugas`;
+                homeBadgePending.style.display = 'inline-flex';
+            } else {
+                homeBadgePending.style.display = 'none';
             }
         }
     }
@@ -1637,20 +1665,73 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await res.json();
             if (json.status === 'success') {
                 AppState.stocks = json.data;
-                renderOpStockSearch(json.data);
+                if (opStockSearchInput && opStockSearchInput.value.trim()) {
+                    filterOpStockList();
+                } else {
+                    renderOpStockSearch(json.data);
+                }
             }
         } catch (err) {}
     };
 
     window.filterOpStockList = function() {
-        const q = (opStockSearchInput.value || '').toLowerCase();
-        const filtered = AppState.stocks.filter(s => 
+        const q = (opStockSearchInput ? opStockSearchInput.value : '').toLowerCase().trim();
+        const btnClear = document.getElementById('btnClearOpStockSearch');
+        if (btnClear) {
+            btnClear.style.display = q ? 'flex' : 'none';
+        }
+        const filtered = (AppState.stocks || []).filter(s => 
             (s.sku && s.sku.toLowerCase().includes(q)) ||
             (s.product_name && s.product_name.toLowerCase().includes(q)) ||
-            (s.bin_code && s.bin_code.toLowerCase().includes(q))
+            (s.bin_code && s.bin_code.toLowerCase().includes(q)) ||
+            (s.barcode && s.barcode.toLowerCase().includes(q))
         );
         renderOpStockSearch(filtered);
     };
+
+    window.clearOpStockSearch = function() {
+        if (opStockSearchInput) {
+            opStockSearchInput.value = '';
+            opStockSearchInput.focus();
+        }
+        const btnClear = document.getElementById('btnClearOpStockSearch');
+        if (btnClear) btnClear.style.display = 'none';
+        filterOpStockList();
+    };
+
+    window.openOpStockCameraScanner = function() {
+        if (!AppState.stocks || AppState.stocks.length === 0) {
+            loadOpStockSearchList();
+        }
+        openCameraScanner('opStockSearchInput', (code) => {
+            if (opStockSearchInput) {
+                opStockSearchInput.value = code;
+            }
+            const btnClear = document.getElementById('btnClearOpStockSearch');
+            if (btnClear) btnClear.style.display = 'flex';
+
+            if (!AppState.stocks || AppState.stocks.length === 0) {
+                loadOpStockSearchList().then(() => {
+                    filterOpStockList();
+                });
+            } else {
+                filterOpStockList();
+            }
+            showToast(`Hasil scan stok: ${code}`, 'success');
+        });
+    };
+
+    if (opStockSearchInput) {
+        opStockSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                filterOpStockList();
+                opStockSearchInput.blur();
+            } else if (e.key === 'Escape') {
+                clearOpStockSearch();
+            }
+        });
+    }
 
     function renderOpStockSearch(items) {
         if (!opStockResultsList) return;
@@ -1664,6 +1745,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <strong>${s.sku}</strong>
                     <small style="display: block; color: var(--text-muted);">${s.product_name}</small>
                     <small style="color: var(--primary); font-weight: 700;">Rak: ${s.bin_code || 'Belum ada Rak'}</small>
+                    ${s.barcode && s.barcode !== '-' ? `<small style="display: block; color: #64748b; font-family: var(--font-mono); font-size: 0.75rem; margin-top: 2px;"><i class="fa-solid fa-barcode"></i> ${s.barcode}</small>` : ''}
                 </div>
                 <div style="text-align: right;">
                     <strong style="font-family: var(--font-mono);">${s.qty_gudang_kecil || 0} Pcs</strong>
@@ -1683,10 +1765,87 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. ADMIN DASHBOARD & MANAGEMENT PORTAL
     // =========================================================================
 
+    // Admin Sidebar Toggle (Minimize / Maximize)
+    window.toggleAdminSidebar = function(forceState) {
+        const layout = document.querySelector('.admin-portal-layout');
+        const btnToggle = document.getElementById('btnToggleAdminSidebar');
+        const iconToggle = document.getElementById('iconToggleAdminSidebar');
+        if (!layout) return;
+
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            const willOpen = (typeof forceState === 'boolean') ? forceState : !layout.classList.contains('mobile-sidebar-open');
+            layout.classList.toggle('mobile-sidebar-open', willOpen);
+            if (btnToggle) {
+                btnToggle.classList.toggle('active', willOpen);
+                btnToggle.title = willOpen ? 'Tutup Menu Sidebar' : 'Buka Menu Sidebar';
+            }
+            if (iconToggle) {
+                iconToggle.className = willOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars';
+            }
+        } else {
+            const willCollapse = (typeof forceState === 'boolean') ? !forceState : !layout.classList.contains('sidebar-collapsed');
+            layout.classList.toggle('sidebar-collapsed', willCollapse);
+            try {
+                localStorage.setItem('ocsAdminSidebarCollapsed', willCollapse ? '1' : '0');
+            } catch (e) {}
+
+            if (btnToggle) {
+                btnToggle.classList.toggle('active', willCollapse);
+                btnToggle.title = willCollapse ? 'Maximize Sidebar (Perluas Menu)' : 'Minimize Sidebar (Perkecil Menu)';
+            }
+            if (iconToggle) {
+                iconToggle.className = willCollapse ? 'fa-solid fa-bars-staggered' : 'fa-solid fa-bars';
+            }
+        }
+    };
+
+    // Restore saved sidebar state on load
+    try {
+        if (window.innerWidth > 768 && localStorage.getItem('ocsAdminSidebarCollapsed') === '1') {
+            const layout = document.querySelector('.admin-portal-layout');
+            const btnToggle = document.getElementById('btnToggleAdminSidebar');
+            const iconToggle = document.getElementById('iconToggleAdminSidebar');
+            if (layout) layout.classList.add('sidebar-collapsed');
+            if (btnToggle) {
+                btnToggle.classList.add('active');
+                btnToggle.title = 'Maximize Sidebar (Perluas Menu)';
+            }
+            if (iconToggle) {
+                iconToggle.className = 'fa-solid fa-bars-staggered';
+            }
+        }
+    } catch (e) {}
+
+    window.addEventListener('resize', () => {
+        const layout = document.querySelector('.admin-portal-layout');
+        if (!layout) return;
+        if (window.innerWidth > 768) {
+            layout.classList.remove('mobile-sidebar-open');
+            const isCollapsed = localStorage.getItem('ocsAdminSidebarCollapsed') === '1';
+            layout.classList.toggle('sidebar-collapsed', isCollapsed);
+            const iconToggle = document.getElementById('iconToggleAdminSidebar');
+            if (iconToggle) {
+                iconToggle.className = isCollapsed ? 'fa-solid fa-bars-staggered' : 'fa-solid fa-bars';
+            }
+            const btnToggle = document.getElementById('btnToggleAdminSidebar');
+            if (btnToggle) {
+                btnToggle.classList.toggle('active', isCollapsed);
+                btnToggle.title = isCollapsed ? 'Maximize Sidebar (Perluas Menu)' : 'Minimize Sidebar (Perkecil Menu)';
+            }
+        } else {
+            layout.classList.remove('sidebar-collapsed');
+        }
+    });
+
     portalNavButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const targetTab = btn.getAttribute('data-tab');
             switchAdminTab(targetTab);
+            if (window.innerWidth <= 768) {
+                toggleAdminSidebar(false);
+            }
         });
     });
 
