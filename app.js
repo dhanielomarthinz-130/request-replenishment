@@ -1894,6 +1894,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const titles = {
             tabDashboard: { title: 'Dashboard Overview', sub: 'Ringkasan operasional pergudangan & sinkronisasi stok' },
             tabSkuRacks: { title: 'Master SKU-Rack & Bin Code', sub: 'Pemetaan kode Bin, Rak Lokasi, SKU, dan Barcode Produk' },
+            tabRackMap: { title: 'Peta Lokasi Rak Gudang', sub: 'Visualisasi denah fisik rak, ketersediaan stok, dan status minus' },
             tabReplenish: { title: 'Permintaan Replenishment', sub: 'Daftar pengajuan mutasi Gudang Besar ke Gudang Kecil' },
             tabStocks: { title: 'Data Stok OCS (Live Inventory)', sub: 'Snapshot saldo stok fisik, Gudang Besar, dan Gudang Kecil' },
             tabMinusStock: { title: 'Stok Minus Gudang Kecil', sub: 'Daftar SKU dengan saldo Gudang Kecil minus atau habis' },
@@ -1910,6 +1911,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const shortTitles = {
                     tabDashboard: 'Dashboard',
                     tabSkuRacks: 'Master SKU-Rack',
+                    tabRackMap: 'Peta Rak',
                     tabReplenish: 'Replenishment',
                     tabStocks: 'Stok OCS',
                     tabMinusStock: 'Stok Minus',
@@ -1921,6 +1923,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tabId === 'tabDashboard') loadDashboardStats();
         if (tabId === 'tabSkuRacks') loadSkuRacks();
+        if (tabId === 'tabRackMap') loadRackMap();
         if (tabId === 'tabReplenish') loadAdminReplenish();
         if (tabId === 'tabStocks') loadStockList();
         if (tabId === 'tabMinusStock') loadMinusStock();
@@ -2188,6 +2191,601 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             showToast('Error: ' + err.message, 'error');
+        }
+    };
+
+    // =========================================================================
+    // 5B. WAREHOUSE RACK MAP (PETA LOKASI RAK)
+    // =========================================================================
+
+    AppState.rackMapData = null;
+    AppState.rackMapFilter = {
+        zone: 'ALL',
+        status: 'ALL', // 'ALL', 'AVAILABLE', 'EMPTY', 'MINUS'
+        basis: 'gudang_kecil', // 'gudang_kecil', 'on_hand', 'gudang_besar'
+        search: '',
+        viewMode: 'grid' // 'grid' | 'list'
+    };
+
+    window.loadRackMap = async function() {
+        const gridContainer = document.getElementById('rackMapGridContainer');
+        const tableBody = document.getElementById('rackMapTableBody');
+        if (gridContainer) {
+            gridContainer.innerHTML = `<div class="td-center py-5" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p style="margin-top: 0.75rem; font-weight: 600;">Menyusun peta lokasi rak gudang...</p></div>`;
+        }
+        if (tableBody) {
+            tableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data...</td></tr>`;
+        }
+
+        try {
+            const res = await fetch('api.php?action=get_rack_map');
+            const json = await res.json();
+            if (json.status === 'success') {
+                AppState.rackMapData = json;
+                updateRackMapStatsUI();
+                renderRackMap();
+            } else {
+                if (gridContainer) gridContainer.innerHTML = `<div class="td-center py-5 text-danger"><i class="fa-solid fa-triangle-exclamation fa-2x"></i><p style="margin-top: 0.5rem;">Gagal memuat peta: ${json.message || 'Error server'}</p></div>`;
+            }
+        } catch (err) {
+            if (gridContainer) gridContainer.innerHTML = `<div class="td-center py-5 text-danger"><i class="fa-solid fa-triangle-exclamation fa-2x"></i><p style="margin-top: 0.5rem;">Koneksi gagal: ${err.message}</p></div>`;
+        }
+    };
+
+    function getStockByBasis(item, basis) {
+        if (basis === 'on_hand') return Number(item.qty_on_hand || 0);
+        if (basis === 'gudang_besar') return Number(item.qty_gudang_besar || 0);
+        return Number(item.qty_gudang_kecil || 0);
+    }
+
+    function updateRackMapStatsUI() {
+        if (!AppState.rackMapData) return;
+        const basis = AppState.rackMapFilter.basis || 'gudang_kecil';
+        const stats = AppState.rackMapData.stats;
+        const curStats = (stats && stats[basis]) ? stats[basis] : (stats.gudang_kecil || { available: 0, empty: 0, minus: 0 });
+
+        const total = stats.total || 0;
+        const avail = curStats.available || 0;
+        const empty = curStats.empty || 0;
+        const minus = curStats.minus || 0;
+
+        const elTotal = document.getElementById('rackMapTotalCount');
+        const elAvail = document.getElementById('rackMapAvailableCount');
+        const elEmpty = document.getElementById('rackMapEmptyCount');
+        const elMinus = document.getElementById('rackMapMinusCount');
+
+        if (elTotal) elTotal.textContent = total.toLocaleString('id-ID');
+        if (elAvail) elAvail.textContent = avail.toLocaleString('id-ID');
+        if (elEmpty) elEmpty.textContent = empty.toLocaleString('id-ID');
+        if (elMinus) elMinus.textContent = minus.toLocaleString('id-ID');
+
+        const elAvailPct = document.getElementById('rackMapAvailablePercent');
+        const elEmptyPct = document.getElementById('rackMapEmptyPercent');
+        const elMinusSub = document.getElementById('rackMapMinusPercent');
+
+        if (elAvailPct && total > 0) elAvailPct.textContent = `${Math.round((avail / total) * 100)}% slot terisi`;
+        if (elEmptyPct && total > 0) elEmptyPct.textContent = `${Math.round((empty / total) * 100)}% slot kosong`;
+        if (elMinusSub) {
+            elMinusSub.textContent = minus > 0 ? `${minus} SKU stok minus di rak!` : 'Semua stok aman (tidak ada minus)';
+        }
+
+        const badgeNav = document.getElementById('badgeRackMinusNav');
+        if (badgeNav) {
+            if (minus > 0) {
+                badgeNav.textContent = minus;
+                badgeNav.style.display = 'inline-block';
+            } else {
+                badgeNav.style.display = 'none';
+            }
+        }
+
+        const zones = AppState.rackMapData.zones_summary || [];
+        const zoneMap = {};
+        zones.forEach(z => { zoneMap[z.zone] = z.total; });
+
+        const countAll = document.getElementById('zoneCountALL');
+        if (countAll) countAll.textContent = total;
+
+        ['RP', 'PL', 'CS', 'RO', 'BIN', 'UNMAPPED'].forEach(z => {
+            const el = document.getElementById('zoneCount' + z);
+            if (el) el.textContent = zoneMap[z] || 0;
+        });
+    }
+
+    window.setRackStatusFilter = function(status) {
+        AppState.rackMapFilter.status = status;
+
+        const cards = {
+            ALL: 'kpiCardAll',
+            AVAILABLE: 'kpiCardAvailable',
+            EMPTY: 'kpiCardEmpty',
+            MINUS: 'kpiCardMinus'
+        };
+        const tags = {
+            ALL: 'tagFilterAll',
+            AVAILABLE: 'tagFilterAvailable',
+            EMPTY: 'tagFilterEmpty',
+            MINUS: 'tagFilterMinus'
+        };
+
+        Object.keys(cards).forEach(key => {
+            const c = document.getElementById(cards[key]);
+            const t = document.getElementById(tags[key]);
+            if (c) {
+                if (key === status) c.classList.add('active-filter-card');
+                else c.classList.remove('active-filter-card');
+            }
+            if (t) {
+                if (key === status) t.classList.add('active');
+                else t.classList.remove('active');
+            }
+        });
+
+        renderRackMap();
+    };
+
+    window.setRackZoneFilter = function(zone) {
+        AppState.rackMapFilter.zone = zone;
+        document.querySelectorAll('.zone-pill-btn').forEach(btn => {
+            if (btn.getAttribute('data-zone') === zone) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+        renderRackMap();
+    };
+
+    window.changeRackStockBasis = function(basis) {
+        AppState.rackMapFilter.basis = basis;
+        updateRackMapStatsUI();
+        renderRackMap();
+    };
+
+    window.setRackViewMode = function(mode) {
+        AppState.rackMapFilter.viewMode = mode;
+        const btnGrid = document.getElementById('btnViewGrid');
+        const btnList = document.getElementById('btnViewList');
+        const gridBox = document.getElementById('rackMapGridContainer');
+        const listBox = document.getElementById('rackMapTableContainer');
+
+        if (mode === 'grid') {
+            if (btnGrid) btnGrid.classList.add('active');
+            if (btnList) btnList.classList.remove('active');
+            if (gridBox) gridBox.style.display = 'block';
+            if (listBox) listBox.style.display = 'none';
+        } else {
+            if (btnList) btnList.classList.add('active');
+            if (btnGrid) btnGrid.classList.remove('active');
+            if (gridBox) gridBox.style.display = 'none';
+            if (listBox) listBox.style.display = 'block';
+        }
+        renderRackMap();
+    };
+
+    window.handleRackMapSearch = debounce(function(query) {
+        AppState.rackMapFilter.search = (query || '').trim().toLowerCase();
+        const btnClear = document.getElementById('btnClearRackSearch');
+        if (btnClear) btnClear.style.display = query ? 'inline-block' : 'none';
+        renderRackMap();
+    }, 250);
+
+    window.clearRackMapSearch = function() {
+        const input = document.getElementById('rackMapSearchInput');
+        if (input) input.value = '';
+        AppState.rackMapFilter.search = '';
+        const btnClear = document.getElementById('btnClearRackSearch');
+        if (btnClear) btnClear.style.display = 'none';
+        renderRackMap();
+    };
+
+    window.renderRackMap = function() {
+        if (!AppState.rackMapData || !AppState.rackMapData.items) return;
+
+        const { zone, status, basis, search, viewMode } = AppState.rackMapFilter;
+        let items = AppState.rackMapData.items;
+
+        if (zone !== 'ALL') {
+            items = items.filter(it => it.zone === zone);
+        }
+
+        if (status !== 'ALL') {
+            items = items.filter(it => {
+                const q = getStockByBasis(it, basis);
+                if (status === 'AVAILABLE') return q > 0;
+                if (status === 'EMPTY') return q === 0;
+                if (status === 'MINUS') return q < 0;
+                return true;
+            });
+        }
+
+        if (search) {
+            items = items.filter(it => 
+                (it.bin_code && it.bin_code.toLowerCase().includes(search)) ||
+                (it.sku && it.sku.toLowerCase().includes(search)) ||
+                (it.product_name && it.product_name.toLowerCase().includes(search)) ||
+                (it.barcode && it.barcode.toLowerCase().includes(search)) ||
+                (it.rack_name && it.rack_name.toLowerCase().includes(search))
+            );
+        }
+
+        if (viewMode === 'grid') {
+            renderRackMapGrid(items);
+        } else {
+            renderRackMapTable(items);
+        }
+    };
+
+    function renderRackMapGrid(items) {
+        const container = document.getElementById('rackMapGridContainer');
+        if (!container) return;
+
+        if (!items || items.length === 0) {
+            container.innerHTML = `
+                <div class="card-white td-center py-5" style="border-radius: 16px; color: var(--text-muted);">
+                    <i class="fa-solid fa-magnifying-glass" style="font-size: 2.2rem; opacity: 0.35; margin-bottom: 0.65rem; display: block;"></i>
+                    <strong style="font-size: 1rem; color: #334155; display: block;">Tidak Ada Lokasi Rak yang Cocok</strong>
+                    <p style="font-size: 0.8rem; margin: 0.35rem 0 0.85rem;">Coba sesuaikan filter status, zona, atau kata kunci pencarian Anda.</p>
+                    <button type="button" class="btn-primary-clean btn-sm" onclick="setRackStatusFilter('ALL'); setRackZoneFilter('ALL'); clearRackMapSearch();">Reset Filter</button>
+                </div>
+            `;
+            return;
+        }
+
+        const basis = AppState.rackMapFilter.basis || 'gudang_kecil';
+
+        const zoneGroups = {};
+        items.forEach(it => {
+            const z = it.zone || 'OTHER';
+            const rk = it.rack || 'MISC';
+            const lv = it.level || '01';
+
+            if (!zoneGroups[z]) zoneGroups[z] = {};
+            if (!zoneGroups[z][rk]) zoneGroups[z][rk] = {};
+            if (!zoneGroups[z][rk][lv]) zoneGroups[z][rk][lv] = [];
+            zoneGroups[z][rk][lv].push(it);
+        });
+
+        const zoneTitles = {
+            RP: { title: 'Zone RP — Rak Picking Reguler', desc: 'Rak standar pengambilan barang operasional (Fast & Medium Moving)', icon: 'fa-cubes-stacked' },
+            PL: { title: 'Zone PL — Pallet Line / Storage', desc: 'Ambalan palet bawah dan area penyimpanan kartonan', icon: 'fa-pallet' },
+            CS: { title: 'Zone CS — Clearance Sale', desc: 'Rak khusus produk promo dan cuci gudang', icon: 'fa-tag' },
+            RO: { title: 'Zone RO — Return & Outbound', desc: 'Rak transit pengembalian dan packing keluar', icon: 'fa-arrow-right-arrow-left' },
+            BIN: { title: 'Zone BIN — Area Bundling & Rak Khusus', desc: 'Lokasi bundling, gimmick, dan packaging', icon: 'fa-box-archive' },
+            UNMAPPED: { title: 'Produk Belum Dipetakan (Unmapped)', desc: 'Produk aktif di OCS yang belum ditempatkan pada rak fisik', icon: 'fa-circle-question' },
+            OTHER: { title: 'Area Rak Lainnya', desc: 'Lokasi penyimpanan khusus', icon: 'fa-warehouse' },
+            TEST: { title: 'Zone Uji Coba (Test)', desc: 'Data rak percobaan', icon: 'fa-flask' }
+        };
+
+        let html = '';
+
+        const zoneOrder = ['RP', 'PL', 'CS', 'RO', 'BIN', 'OTHER', 'UNMAPPED', 'TEST'];
+        const existingZones = Object.keys(zoneGroups).sort((a, b) => {
+            const idxA = zoneOrder.indexOf(a);
+            const idxB = zoneOrder.indexOf(b);
+            return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+        });
+
+        existingZones.forEach(z => {
+            const racks = zoneGroups[z];
+            const meta = zoneTitles[z] || { title: `Zone ${z}`, desc: 'Area Rak Gudang', icon: 'fa-warehouse' };
+            const rackKeys = Object.keys(racks).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+            let zoneTotalSlots = 0;
+            let zoneAvail = 0;
+            let zoneEmpty = 0;
+            let zoneMinus = 0;
+
+            rackKeys.forEach(rk => {
+                Object.keys(racks[rk]).forEach(lv => {
+                    racks[rk][lv].forEach(it => {
+                        zoneTotalSlots++;
+                        const q = getStockByBasis(it, basis);
+                        if (q > 0) zoneAvail++;
+                        else if (q === 0) zoneEmpty++;
+                        else zoneMinus++;
+                    });
+                });
+            });
+
+            html += `
+            <div class="rack-zone-section" data-zone-section="${z}">
+                <div class="rack-zone-header">
+                    <div class="rack-zone-title-box">
+                        <div style="width: 38px; height: 38px; border-radius: 10px; background: #e0e7ff; color: #4338ca; display: grid; place-items: center; font-size: 1.15rem;">
+                            <i class="fa-solid ${meta.icon}"></i>
+                        </div>
+                        <div>
+                            <h3>${meta.title}</h3>
+                            <span style="font-size: 0.74rem; color: #64748b;">${meta.desc} • <strong>${rackKeys.length} Rak</strong> (${zoneTotalSlots} Slot)</span>
+                        </div>
+                    </div>
+                    <div class="rack-zone-meta">
+                        ${zoneAvail > 0 ? `<span class="shelf-micro-pill green"><i class="fa-solid fa-boxes-stacked"></i> ${zoneAvail} Ada Qty</span>` : ''}
+                        ${zoneEmpty > 0 ? `<span class="shelf-micro-pill amber"><i class="fa-solid fa-inbox"></i> ${zoneEmpty} Kosong</span>` : ''}
+                        ${zoneMinus > 0 ? `<span class="shelf-micro-pill red pulse-danger"><i class="fa-solid fa-triangle-exclamation"></i> ${zoneMinus} Minus</span>` : ''}
+                    </div>
+                </div>
+
+                <div class="rack-shelves-grid">
+            `;
+
+            rackKeys.forEach(rk => {
+                const levels = racks[rk];
+                const levelKeys = Object.keys(levels).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+
+                let shelfTotal = 0;
+                let shelfMinus = 0;
+                let shelfAvail = 0;
+                let shelfEmpty = 0;
+
+                levelKeys.forEach(lv => {
+                    levels[lv].forEach(it => {
+                        shelfTotal++;
+                        const q = getStockByBasis(it, basis);
+                        if (q < 0) shelfMinus++;
+                        else if (q > 0) shelfAvail++;
+                        else shelfEmpty++;
+                    });
+                });
+
+                const rackTitle = z === 'UNMAPPED' ? 'Daftar SKU Belum Ada Rak' : (rk === 'MISC' ? 'Rak Umum' : `Rak ${z}-${rk}`);
+
+                html += `
+                <div class="rack-shelf-card">
+                    <div class="rack-shelf-header">
+                        <div class="shelf-title-wrap">
+                            <i class="fa-solid fa-server" style="color: #6366f1; font-size: 0.85rem;"></i>
+                            <h4>${rackTitle}</h4>
+                        </div>
+                        <div class="shelf-stat-pills">
+                            ${shelfAvail > 0 ? `<span class="shelf-micro-pill green" title="Ada stok">${shelfAvail}</span>` : ''}
+                            ${shelfEmpty > 0 ? `<span class="shelf-micro-pill amber" title="Kosong">${shelfEmpty}</span>` : ''}
+                            ${shelfMinus > 0 ? `<span class="shelf-micro-pill red pulse-danger" title="Stok minus!">${shelfMinus}</span>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="shelf-levels-stack">
+                `;
+
+                levelKeys.forEach(lv => {
+                    const slots = levels[lv].sort((a, b) => (a.slot || '').localeCompare(b.slot || '', undefined, { numeric: true }));
+                    const levelLabel = lv.startsWith('0') ? 'L' + lv.replace(/^0+/, '') : ('L' + lv);
+
+                    html += `
+                    <div class="shelf-level-row">
+                        <div class="shelf-level-badge" title="Tingkat / Ambalan Rak ${lv}">
+                            ${levelLabel}
+                            <span>LVL</span>
+                        </div>
+                        <div class="shelf-slots-row">
+                    `;
+
+                    slots.forEach(it => {
+                        const q = getStockByBasis(it, basis);
+                        let statusClass = 'slot-empty';
+                        let qtyDisplay = '0';
+                        let badgeIcon = '';
+
+                        if (it.is_synthetic) {
+                            statusClass = 'slot-unmapped';
+                            qtyDisplay = q > 0 ? `+${q}` : (q < 0 ? `${q}` : '0');
+                        } else if (q < 0) {
+                            statusClass = 'slot-minus pulse-danger';
+                            qtyDisplay = `${q}`;
+                            badgeIcon = '<i class="fa-solid fa-triangle-exclamation" style="font-size:0.6rem; margin-right:2px;"></i>';
+                        } else if (q > 0) {
+                            statusClass = 'slot-available';
+                            qtyDisplay = `+${q}`;
+                        } else {
+                            statusClass = 'slot-empty';
+                            qtyDisplay = '0';
+                        }
+
+                        const slotLabel = it.is_synthetic ? 'UNM' : (it.slot || '-');
+                        const tooltip = `${it.bin_code} | ${it.sku}\n${it.product_name}\nSaldo: ${q} Pcs (${basis === 'gudang_kecil' ? 'Gudang Kecil' : basis})`;
+
+                        html += `
+                        <div class="rack-slot-cell ${statusClass}" 
+                             onclick="openRackSlotDetail(${it.id})" 
+                             title="${tooltip}">
+                            <div class="slot-top-row">
+                                <span class="slot-code">${slotLabel}</span>
+                                <span class="slot-qty">${badgeIcon}${qtyDisplay}</span>
+                            </div>
+                            <div class="slot-sku-text">${it.sku || it.product_name}</div>
+                        </div>
+                        `;
+                    });
+
+                    html += `
+                        </div>
+                    </div>
+                    `;
+                });
+
+                html += `
+                    </div>
+                </div>
+                `;
+            });
+
+            html += `
+                </div>
+            </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function renderRackMapTable(items) {
+        const tableBody = document.getElementById('rackMapTableBody');
+        if (!tableBody) return;
+
+        if (!items || items.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="10" class="td-center py-4" style="color: var(--text-muted);">Tidak ada data lokasi rak yang cocok dengan filter.</td></tr>`;
+            return;
+        }
+
+        const basis = AppState.rackMapFilter.basis || 'gudang_kecil';
+
+        tableBody.innerHTML = items.map(it => {
+            const q = getStockByBasis(it, basis);
+            let statusBadge = '';
+            if (it.is_synthetic) {
+                statusBadge = `<span class="bin-unmapped-tag"><i class="fa-regular fa-circle-question"></i> Belum Dipetakan</span>`;
+            } else if (q < 0) {
+                statusBadge = `<span class="badge-status rejected pulse-danger" style="background:#fee2e2; color:#b91c1c; font-weight:800;"><i class="fa-solid fa-triangle-exclamation"></i> MINUS (${q})</span>`;
+            } else if (q === 0) {
+                statusBadge = `<span class="badge-status default" style="background:#f1f5f9; color:#64748b; font-weight:700;"><i class="fa-solid fa-inbox"></i> Kosong (0)</span>`;
+            } else {
+                statusBadge = `<span class="badge-status completed" style="background:#ecfdf5; color:#047857; font-weight:700;"><i class="fa-solid fa-circle-check"></i> Ada Qty (+${q})</span>`;
+            }
+
+            const binBadge = formatBinBadge(it.bin_code, it.sku);
+            const levelSlot = it.is_synthetic ? '-' : `Lvl ${it.level} / Slot ${it.slot}`;
+
+            return `
+            <tr>
+                <td>${binBadge}</td>
+                <td><strong style="font-family: var(--font-mono); font-size: 0.8rem; color: #4338ca;">${it.zone}</strong> - <span style="font-weight:600;">${it.rack}</span></td>
+                <td><small style="font-family: var(--font-mono); font-weight:700; color:#334155;">${levelSlot}</small></td>
+                <td class="col-sku-combined">
+                    <span class="sku-code-text">${it.sku}</span>
+                    <span class="sku-product-name">${it.product_name || '-'}</span>
+                </td>
+                <td><small style="font-family: var(--font-mono); color: #64748b;">${it.barcode || '-'}</small></td>
+                <td class="td-right"><strong style="font-family: var(--font-mono); font-size: 0.95rem; color: ${it.qty_gudang_kecil < 0 ? '#b91c1c' : '#0f172a'};">${Number(it.qty_gudang_kecil || 0).toLocaleString('id-ID')}</strong></td>
+                <td class="td-right" style="color: var(--success); font-weight: 700; font-family: var(--font-mono);">${Number(it.qty_gudang_besar || 0).toLocaleString('id-ID')}</td>
+                <td class="td-right" style="font-family: var(--font-mono);">${Number(it.qty_on_hand || 0).toLocaleString('id-ID')}</td>
+                <td class="td-center">${statusBadge}</td>
+                <td class="td-center">
+                    <div style="display: flex; gap: 0.35rem; justify-content: center;">
+                        <button class="btn-primary-clean btn-sm" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;" onclick="openRackSlotDetail(${it.id})" title="Lihat Detail Slot">
+                            <i class="fa-solid fa-circle-info"></i> Detail
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            `;
+        }).join('');
+    }
+
+    window.openRackSlotDetail = function(itemId) {
+        if (!AppState.rackMapData || !AppState.rackMapData.items) return;
+        const item = AppState.rackMapData.items.find(it => Number(it.id) === Number(itemId));
+        if (!item) return;
+
+        const binTitle = document.getElementById('slotModalBinCode');
+        const rackSub = document.getElementById('slotModalRackSubtitle');
+        const body = document.getElementById('slotModalBodyContent');
+
+        if (binTitle) binTitle.textContent = item.bin_code || ('BIN-' + item.sku);
+        if (rackSub) {
+            rackSub.textContent = item.is_synthetic ? 'Produk Belum Ada Lokasi Rak Fisik di OCS' : `${item.rack_name || item.bin_code} (Zona ${item.zone}, Rak ${item.rack}, Level ${item.level}, Slot ${item.slot})`;
+        }
+
+        const basis = AppState.rackMapFilter.basis || 'gudang_kecil';
+        const qBasis = getStockByBasis(item, basis);
+
+        let statusHtml = '';
+        if (qBasis < 0) {
+            statusHtml = `<span class="badge-status rejected pulse-danger" style="background:#fee2e2; color:#b91c1c; font-weight:800; font-size:0.8rem; padding:0.3rem 0.75rem;"><i class="fa-solid fa-triangle-exclamation"></i> STOK MINUS (${qBasis} Pcs)</span>`;
+        } else if (qBasis === 0) {
+            statusHtml = `<span class="badge-status default" style="background:#f1f5f9; color:#64748b; font-weight:700; font-size:0.8rem; padding:0.3rem 0.75rem;"><i class="fa-solid fa-inbox"></i> STOK KOSONG (0 Pcs)</span>`;
+        } else {
+            statusHtml = `<span class="badge-status completed" style="background:#ecfdf5; color:#047857; font-weight:700; font-size:0.8rem; padding:0.3rem 0.75rem;"><i class="fa-solid fa-circle-check"></i> STOK TERSEDIA (+${qBasis} Pcs)</span>`;
+        }
+
+        if (body) {
+            body.innerHTML = `
+                <!-- Status Row -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9;">
+                    <div>
+                        <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Status Stok (${basis === 'gudang_kecil' ? 'Gudang Kecil' : basis})</span>
+                        <div style="margin-top: 0.25rem;">${statusHtml}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Area</span>
+                        <div style="font-size: 0.85rem; font-weight: 800; color: #0f172a;">${item.area_id || 'Pusat'}</div>
+                    </div>
+                </div>
+
+                <!-- Product Info Card -->
+                <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 1rem;">
+                    <span style="font-size: 0.7rem; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.04em;">SKU Produk</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.15rem;">
+                        <strong style="font-family: var(--font-mono); font-size: 0.95rem; color: #0f172a;">${item.sku}</strong>
+                        <button type="button" class="btn-secondary-clean btn-sm" onclick="navigator.clipboard.writeText('${item.sku}'); showToast('SKU disalin ke clipboard!', 'success');" title="Salin SKU">
+                            <i class="fa-regular fa-copy"></i> Salin
+                        </button>
+                    </div>
+                    <div style="font-size: 0.88rem; font-weight: 600; color: #334155; margin-top: 0.35rem; line-height: 1.35;">${item.product_name || '-'}</div>
+                    <div style="display: flex; gap: 1rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #cbd5e1; font-size: 0.75rem; color: #64748b;">
+                        <span><i class="fa-solid fa-barcode"></i> Barcode: <strong style="font-family: var(--font-mono); color: #0f172a;">${item.barcode || '-'}</strong></span>
+                        <span><i class="fa-solid fa-layer-group"></i> Kategori: <strong>${item.category || 'General'}</strong></span>
+                    </div>
+                </div>
+
+                <!-- Stock Breakdown Matrix -->
+                <div class="modal-stock-breakdown-card">
+                    <span style="font-size: 0.72rem; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.04em;">Rincian Saldo Stok Fisik OCS</span>
+                    <div class="stock-pill-row">
+                        <div class="stock-pill-cell" style="${item.qty_gudang_kecil < 0 ? 'border-color: #fca5a5; background: #fef2f2;' : ''}">
+                            <span class="stock-num" style="color: ${item.qty_gudang_kecil < 0 ? '#b91c1c' : '#0f172a'};">${Number(item.qty_gudang_kecil || 0).toLocaleString('id-ID')}</span>
+                            <span class="stock-label">Gudang Kecil</span>
+                        </div>
+                        <div class="stock-pill-cell">
+                            <span class="stock-num" style="color: #059669;">${Number(item.qty_gudang_besar || 0).toLocaleString('id-ID')}</span>
+                            <span class="stock-label">Gudang Besar</span>
+                        </div>
+                        <div class="stock-pill-cell">
+                            <span class="stock-num">${Number(item.qty_on_hand || 0).toLocaleString('id-ID')}</span>
+                            <span class="stock-label">On Hand</span>
+                        </div>
+                        <div class="stock-pill-cell">
+                            <span class="stock-num" style="color: #0284c7;">${Number(item.qty_available || 0).toLocaleString('id-ID')}</span>
+                            <span class="stock-label">Available</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 0.65rem; margin-top: 1.25rem;">
+                    <button type="button" class="btn-secondary-clean" style="flex: 1; padding: 0.65rem; font-size: 0.82rem; font-weight: 700;" onclick="closeModal('modalRackSlotDetail')">
+                        Tutup
+                    </button>
+                    <button type="button" class="btn-primary-clean" style="flex: 2; padding: 0.65rem; font-size: 0.82rem; font-weight: 800; background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); justify-content: center;" onclick="triggerQuickReplenishFromSlot('${item.bin_code || ('BIN-' + item.sku)}', '${item.sku}')">
+                        <i class="fa-solid fa-truck-ramp-box"></i> Ajukan Replenish
+                    </button>
+                </div>
+            `;
+        }
+
+        openModal('modalRackSlotDetail');
+    };
+
+    window.triggerQuickReplenishFromSlot = function(binCode, sku) {
+        closeModal('modalRackSlotDetail');
+
+        if (AppState.activeView === 'operator') {
+            switchMobileTab('opTabScan');
+            const input = document.getElementById('inputBinCode');
+            if (input) input.value = binCode;
+            executeBinScan(binCode);
+            return;
+        }
+
+        switchAdminTab('tabReplenish');
+        showToast(`Lokasi rak ${binCode} siap diajukan untuk mutasi.`, 'info');
+    };
+
+    window.openMobileRackMap = function() {
+        if (AppState.user && AppState.user.role === 'admin') {
+            switchView('admin');
+            switchAdminTab('tabRackMap');
+        } else {
+            switchView('admin');
+            switchAdminTab('tabRackMap');
+            showToast('Menampilkan Peta Lokasi Rak Gudang.', 'info');
         }
     };
 

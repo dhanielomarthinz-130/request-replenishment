@@ -465,6 +465,23 @@
               </div>
             </div>
 
+            <!-- Card 4: Peta Lokasi Rak (Rack Map) -->
+            <div class="android-menu-card card-rack-map" onclick="openMobileRackMap()">
+              <div class="menu-card-top">
+                <div class="menu-card-icon" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
+                  <i class="fa-solid fa-map-location-dot"></i>
+                </div>
+                <span class="menu-card-badge-tag" style="background: #ede9fe; color: #5b21b6;">Denah Rak</span>
+              </div>
+              <div class="menu-card-body">
+                <h3 class="menu-card-title">Peta Lokasi Rak</h3>
+                <p class="menu-card-desc">Denah visual rak fisik, cek slot kosong, ada stok, &amp; minus</p>
+              </div>
+              <div class="menu-card-footer">
+                <span class="menu-footer-link">Buka Peta Rak <i class="fa-solid fa-arrow-right"></i></span>
+              </div>
+            </div>
+
           </div>
 
           <!-- Riwayat Selesai Direplenish Hari Ini -->
@@ -890,6 +907,12 @@
             <span class="nav-text">Master SKU-Rack</span>
           </button>
 
+          <button class="portal-nav-btn" data-tab="tabRackMap" title="Peta Lokasi Rak">
+            <span class="nav-icon"><i class="fa-solid fa-map-location-dot"></i></span>
+            <span class="nav-text">Peta Lokasi Rak</span>
+            <span class="portal-badge" id="badgeRackMinusNav" style="display: none; background: #ef4444;">0</span>
+          </button>
+
           <button class="portal-nav-btn" data-tab="tabStocks" title="Data Stok OCS">
             <span class="nav-icon"><i class="fa-solid fa-warehouse"></i></span>
             <span class="nav-text">Data Stok OCS</span>
@@ -1022,6 +1045,13 @@
                   <i class="fa-solid fa-table-cells"></i>
                 </div>
                 <h4>Master SKU-Rack</h4>
+              </div>
+
+              <div class="ieg-module-card" onclick="switchAdminTab('tabRackMap')">
+                <div class="module-icon-box map-gradient" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white;">
+                  <i class="fa-solid fa-map-location-dot"></i>
+                </div>
+                <h4>Peta Lokasi Rak</h4>
               </div>
 
               <div class="ieg-module-card" onclick="switchAdminTab('tabStocks')">
@@ -1191,6 +1221,10 @@
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
                   </button>
+                  <button class="btn-toolbar-btn" style="background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); color: #ffffff; border: none; box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);" onclick="switchAdminTab('tabRackMap')" title="Buka Denah Peta Visual Rak">
+                    <i class="fa-solid fa-map-location-dot"></i>
+                    <span>Peta Lokasi Rak</span>
+                  </button>
                 </div>
               </div>
 
@@ -1214,6 +1248,183 @@
                   </tbody>
                 </table>
               </div>
+            </div>
+          </section>
+
+          <!-- TAB: PETA LOKASI RAK (WAREHOUSE RACK MAP) -->
+          <section id="tabRackMap" class="portal-tab-pane">
+            <div class="rack-map-main-wrapper">
+
+              <!-- KPI Metric Summary Row -->
+              <div class="rack-kpi-grid">
+                <div class="rack-kpi-card" id="kpiCardAll" onclick="setRackStatusFilter('ALL')" title="Klik untuk tampilkan semua status">
+                  <div class="kpi-icon-badge blue">
+                    <i class="fa-solid fa-warehouse"></i>
+                  </div>
+                  <div class="kpi-info">
+                    <span class="kpi-label">Total Lokasi Rak</span>
+                    <h3 id="rackMapTotalCount">0</h3>
+                    <span class="kpi-sub" id="rackMapTotalSub">674 Slot di Gudang</span>
+                  </div>
+                  <div class="kpi-filter-tag active" id="tagFilterAll">Semua</div>
+                </div>
+
+                <div class="rack-kpi-card" id="kpiCardAvailable" onclick="setRackStatusFilter('AVAILABLE')" title="Klik untuk filter hanya rak yang ada stok">
+                  <div class="kpi-icon-badge green">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                  </div>
+                  <div class="kpi-info">
+                    <span class="kpi-label">Ada Qty (&gt; 0)</span>
+                    <h3 id="rackMapAvailableCount" class="text-green">0</h3>
+                    <span class="kpi-sub" id="rackMapAvailablePercent">0% slot terisi</span>
+                  </div>
+                  <div class="kpi-filter-tag" id="tagFilterAvailable">Tersedia</div>
+                </div>
+
+                <div class="rack-kpi-card" id="kpiCardEmpty" onclick="setRackStatusFilter('EMPTY')" title="Klik untuk filter hanya rak kosong">
+                  <div class="kpi-icon-badge slate">
+                    <i class="fa-solid fa-inbox"></i>
+                  </div>
+                  <div class="kpi-info">
+                    <span class="kpi-label">Kosong (Qty 0)</span>
+                    <h3 id="rackMapEmptyCount" class="text-slate">0</h3>
+                    <span class="kpi-sub" id="rackMapEmptyPercent">0% slot kosong</span>
+                  </div>
+                  <div class="kpi-filter-tag" id="tagFilterEmpty">Kosong</div>
+                </div>
+
+                <div class="rack-kpi-card pulse-danger" id="kpiCardMinus" onclick="setRackStatusFilter('MINUS')" title="Klik untuk filter rak yang minus (Prioritas Replenish!)">
+                  <div class="kpi-icon-badge red">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                  </div>
+                  <div class="kpi-info">
+                    <span class="kpi-label">Minus Stok (&lt; 0)</span>
+                    <h3 id="rackMapMinusCount" class="text-red">0</h3>
+                    <span class="kpi-sub" id="rackMapMinusPercent">Perlu Replenish Segera</span>
+                  </div>
+                  <div class="kpi-filter-tag danger" id="tagFilterMinus">Minus</div>
+                </div>
+              </div>
+
+              <!-- Map Controls Toolbar Card -->
+              <div class="card-white rack-map-controls-card">
+                <div class="rack-toolbar-top">
+                  <div class="rack-search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="rackMapSearchInput" placeholder="Cari Bin Code, SKU, atau Nama Produk..." oninput="handleRackMapSearch(this.value)">
+                    <button type="button" class="btn-clear-search" id="btnClearRackSearch" style="display: none;" onclick="clearRackMapSearch()" title="Hapus pencarian">
+                      <i class="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+
+                  <div class="rack-basis-box">
+                    <label for="rackStockBasis"><i class="fa-solid fa-sliders"></i> Acuan Status:</label>
+                    <select id="rackStockBasis" class="rack-select-input" onchange="changeRackStockBasis(this.value)">
+                      <option value="gudang_kecil" selected>Gudang Kecil (Default Replenish)</option>
+                      <option value="on_hand">Total On Hand (Fisik Keseluruhan)</option>
+                      <option value="gudang_besar">Gudang Besar</option>
+                    </select>
+                  </div>
+
+                  <div class="rack-view-toggle">
+                    <button type="button" class="btn-view-toggle active" id="btnViewGrid" onclick="setRackViewMode('grid')" title="Tampilan Peta Rak Visual">
+                      <i class="fa-solid fa-table-cells-large"></i> Peta Visual
+                    </button>
+                    <button type="button" class="btn-view-toggle" id="btnViewList" onclick="setRackViewMode('list')" title="Tampilan Tabel List">
+                      <i class="fa-solid fa-list-ul"></i> Tabel List
+                    </button>
+                    <button type="button" class="btn-toolbar-btn outline btn-sm" onclick="loadRackMap()" title="Refresh Data Peta">
+                      <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Zone Navigation Tabs -->
+                <div class="rack-zone-pills-row" id="rackZonePillsContainer">
+                  <button type="button" class="zone-pill-btn active" data-zone="ALL" onclick="setRackZoneFilter('ALL')">
+                    <i class="fa-solid fa-border-all"></i> Semua Zona <span class="pill-badge" id="zoneCountALL">674</span>
+                  </button>
+                  <button type="button" class="zone-pill-btn" data-zone="RP" onclick="setRackZoneFilter('RP')">
+                    <i class="fa-solid fa-cubes-stacked"></i> Zone RP (Picking) <span class="pill-badge" id="zoneCountRP">0</span>
+                  </button>
+                  <button type="button" class="zone-pill-btn" data-zone="PL" onclick="setRackZoneFilter('PL')">
+                    <i class="fa-solid fa-pallet"></i> Zone PL (Pallet Line) <span class="pill-badge" id="zoneCountPL">0</span>
+                  </button>
+                  <button type="button" class="zone-pill-btn" data-zone="CS" onclick="setRackZoneFilter('CS')">
+                    <i class="fa-solid fa-tag"></i> Zone CS (Clearance) <span class="pill-badge" id="zoneCountCS">0</span>
+                  </button>
+                  <button type="button" class="zone-pill-btn" data-zone="RO" onclick="setRackZoneFilter('RO')">
+                    <i class="fa-solid fa-arrow-right-arrow-left"></i> Zone RO (Return/Out) <span class="pill-badge" id="zoneCountRO">0</span>
+                  </button>
+                  <button type="button" class="zone-pill-btn" data-zone="BIN" onclick="setRackZoneFilter('BIN')">
+                    <i class="fa-solid fa-box-archive"></i> Area Khusus / BIN <span class="pill-badge" id="zoneCountBIN">0</span>
+                  </button>
+                  <button type="button" class="zone-pill-btn" data-zone="UNMAPPED" onclick="setRackZoneFilter('UNMAPPED')">
+                    <i class="fa-solid fa-circle-question"></i> Belum Dipetakan <span class="pill-badge" id="zoneCountUNMAPPED">0</span>
+                  </button>
+                </div>
+
+                <!-- Map Legend Guide -->
+                <div class="rack-legend-bar">
+                  <div class="legend-indicators">
+                    <div class="legend-item" onclick="setRackStatusFilter('AVAILABLE')" style="cursor: pointer;">
+                      <span class="legend-swatch available"></span>
+                      <span class="legend-text"><strong>Ada Qty</strong> (&gt; 0)</span>
+                    </div>
+                    <div class="legend-item" onclick="setRackStatusFilter('EMPTY')" style="cursor: pointer;">
+                      <span class="legend-swatch empty"></span>
+                      <span class="legend-text"><strong>Kosong</strong> (Qty 0)</span>
+                    </div>
+                    <div class="legend-item pulse-legend" onclick="setRackStatusFilter('MINUS')" style="cursor: pointer;">
+                      <span class="legend-swatch minus pulse-danger"></span>
+                      <span class="legend-text"><strong>Minus Stok</strong> (&lt; 0)</span>
+                    </div>
+                    <div class="legend-item" onclick="setRackZoneFilter('UNMAPPED')" style="cursor: pointer;">
+                      <span class="legend-swatch unmapped"></span>
+                      <span class="legend-text"><strong>Belum Ada Rak</strong> (OCS)</span>
+                    </div>
+                  </div>
+                  <div class="legend-hint">
+                    <i class="fa-solid fa-hand-pointer"></i> Klik slot mana pun untuk info detail &amp; pengajuan replenish cepat
+                  </div>
+                </div>
+              </div>
+
+              <!-- Visual Map Display Container -->
+              <div id="rackMapGridContainer" class="rack-map-grid-view">
+                <div class="td-center py-5" style="color: var(--text-muted);">
+                  <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                  <p style="margin-top: 0.75rem;">Menyusun peta lokasi rak gudang...</p>
+                </div>
+              </div>
+
+              <!-- Alternative Table View Container -->
+              <div id="rackMapTableContainer" class="card-white rack-map-table-view" style="display: none;">
+                <div class="table-clean-wrapper">
+                  <table class="table-clean">
+                    <thead>
+                      <tr>
+                        <th>Bin Code</th>
+                        <th>Zona / Rak</th>
+                        <th>Level - Slot</th>
+                        <th class="col-sku-combined">SKU &amp; Nama Produk</th>
+                        <th>Barcode</th>
+                        <th class="td-right">Gudang Kecil</th>
+                        <th class="td-right">Gudang Besar</th>
+                        <th class="td-right">On Hand</th>
+                        <th class="td-center">Status</th>
+                        <th class="td-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rackMapTableBody">
+                      <tr>
+                        <td colspan="10" class="td-center">Memuat data tabel peta...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
             </div>
           </section>
 
@@ -1665,6 +1876,31 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: DETAIL LOKASI RAK & INFORMASI STOK -->
+  <!-- ========================================================================= -->
+  <div id="modalRackSlotDetail" class="clean-modal-overlay">
+    <div class="form-modal-box" style="max-width: 560px;">
+      <div class="form-modal-header" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: white; padding: 1rem 1.25rem; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(255, 255, 255, 0.15); display: grid; place-items: center; font-size: 1.1rem;">
+            <i class="fa-solid fa-map-location-dot"></i>
+          </div>
+          <div>
+            <h3 id="slotModalBinCode" style="margin: 0; font-size: 1.1rem; font-weight: 800; color: white;">BIN-CODE</h3>
+            <span id="slotModalRackSubtitle" style="font-size: 0.75rem; color: #c7d2fe;">Lokasi Rak Fisik Gudang</span>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" style="color: white; opacity: 0.8; font-size: 1.5rem; background: none; border: none; cursor: pointer;" onclick="closeModal('modalRackSlotDetail')">&times;</button>
+      </div>
+
+      <div class="form-modal-body" id="slotModalBodyContent" style="padding: 1.25rem;">
+        <!-- Populated dynamically by app.js -->
+      </div>
     </div>
   </div>
 

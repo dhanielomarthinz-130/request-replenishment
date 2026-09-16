@@ -1014,6 +1014,120 @@ if ($action === 'get_sku_racks') {
     jsonResp(['status' => 'success', 'data' => $data]);
 }
 
+if ($action === 'get_rack_map') {
+    $sql = "
+        SELECT 
+            r.id,
+            r.bin_code,
+            r.rack_name,
+            r.sku,
+            COALESCE(NULLIF(r.barcode, ''), NULLIF(s.barcode, ''), '-') as barcode,
+            r.product_name,
+            r.category,
+            r.notes,
+            COALESCE(s.qty_on_hand, 0) as qty_on_hand,
+            COALESCE(s.qty_available, 0) as qty_available,
+            COALESCE(s.qty_gudang_kecil, 0) as qty_gudang_kecil,
+            COALESCE(s.qty_gudang_besar, 0) as qty_gudang_besar,
+            s.area_id,
+            s.last_synced_at
+        FROM sku_rack_locations r
+        LEFT JOIN stock_master s ON r.sku = s.sku
+        ORDER BY r.bin_code ASC
+    ";
+    $rows = $pdo->query($sql)->fetchAll();
+
+    $totalCount = count($rows);
+    $stats = [
+        'total' => $totalCount,
+        'gudang_kecil' => ['available' => 0, 'empty' => 0, 'minus' => 0],
+        'on_hand' => ['available' => 0, 'empty' => 0, 'minus' => 0],
+        'gudang_besar' => ['available' => 0, 'empty' => 0, 'minus' => 0]
+    ];
+    $zonesSummary = [];
+
+    $items = [];
+    foreach ($rows as $r) {
+        $binCode = trim($r['bin_code']);
+        $sku = trim($r['sku']);
+        $isSynthetic = empty($binCode) || strtoupper($binCode) === ('BIN-' . strtoupper($sku)) || strpos(strtoupper($binCode), 'BIN-' . strtoupper($sku)) === 0;
+
+        $zone = 'OTHER';
+        $rack = 'MISC';
+        $level = '01';
+        $slot = '01';
+
+        if (!$isSynthetic && preg_match('/^([A-Z0-9]+)-([0-9A-Za-z]+)-([0-9A-Za-z]+)-([0-9A-Za-z]+)$/', $binCode, $m)) {
+            $zone = $m[1];
+            $rack = $m[2];
+            $level = $m[3];
+            $slot = $m[4];
+        } elseif (!$isSynthetic && preg_match('/^([A-Z0-9]+)-([0-9A-Za-z]+)-([0-9A-Za-z]+)$/', $binCode, $m)) {
+            $zone = $m[1];
+            $rack = $m[2];
+            $level = '01';
+            $slot = $m[3];
+        } elseif ($isSynthetic) {
+            $zone = 'UNMAPPED';
+            $rack = 'UNMAPPED';
+            $level = '-';
+            $slot = '-';
+        }
+
+        $gk = (int)$r['qty_gudang_kecil'];
+        $gb = (int)$r['qty_gudang_besar'];
+        $oh = (int)$r['qty_on_hand'];
+
+        if ($gk > 0) $stats['gudang_kecil']['available']++;
+        elseif ($gk === 0) $stats['gudang_kecil']['empty']++;
+        else $stats['gudang_kecil']['minus']++;
+
+        if ($oh > 0) $stats['on_hand']['available']++;
+        elseif ($oh === 0) $stats['on_hand']['empty']++;
+        else $stats['on_hand']['minus']++;
+
+        if ($gb > 0) $stats['gudang_besar']['available']++;
+        elseif ($gb === 0) $stats['gudang_besar']['empty']++;
+        else $stats['gudang_besar']['minus']++;
+
+        if (!isset($zonesSummary[$zone])) {
+            $zonesSummary[$zone] = [
+                'zone' => $zone,
+                'total' => 0,
+                'available' => 0,
+                'empty' => 0,
+                'minus' => 0,
+                'racks' => []
+            ];
+        }
+        $zonesSummary[$zone]['total']++;
+        $zonesSummary[$zone]['racks'][$rack] = true;
+        if ($gk > 0) $zonesSummary[$zone]['available']++;
+        elseif ($gk === 0) $zonesSummary[$zone]['empty']++;
+        else $zonesSummary[$zone]['minus']++;
+
+        $r['zone'] = $zone;
+        $r['rack'] = $rack;
+        $r['level'] = $level;
+        $r['slot'] = $slot;
+        $r['is_synthetic'] = $isSynthetic;
+        $items[] = $r;
+    }
+
+    foreach ($zonesSummary as $z => &$zs) {
+        $zs['racks_count'] = count($zs['racks']);
+        unset($zs['racks']);
+    }
+    unset($zs);
+
+    jsonResp([
+        'status' => 'success',
+        'stats' => $stats,
+        'zones_summary' => array_values($zonesSummary),
+        'items' => $items
+    ]);
+}
+
 if ($action === 'save_sku_rack') {
     $id = (int)($input['id'] ?? 0);
     $binCode = strtoupper(trim($input['bin_code'] ?? ''));
